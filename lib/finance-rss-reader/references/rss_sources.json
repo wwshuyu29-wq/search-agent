@@ -1,14 +1,14 @@
 [
   {
     "name": "Reuters Business",
-    "url": "https://feeds.reuters.com/reuters/businessNews",
+    "url": "https://www.reuters.com/business/feed/",
     "region": "en",
     "type": "媒体",
-    "note": "全球公司财报/并购/宏观"
+    "note": "全球公司财报/并购/宏观（feeds.reuters.com 已停用，改用主域）"
   },
   {
     "name": "Reuters Markets",
-    "url": "https://feeds.reuters.com/reuters/financialNewsUS",
+    "url": "https://www.reuters.com/markets/feed/",
     "region": "en",
     "type": "媒体",
     "note": "金融市场动态"
@@ -36,10 +36,10 @@
   },
   {
     "name": "WSJ Markets",
-    "url": "https://feeds.content.dowjones.io/public/rss/mktw_realtimeheadlines",
+    "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
     "region": "en",
     "type": "媒体",
-    "note": "华尔街日报市场实时头条"
+    "note": "华尔街日报市场版（旧 mktw feed 已 404）"
   },
   {
     "name": "CNBC Finance",
@@ -50,10 +50,10 @@
   },
   {
     "name": "Investopedia News",
-    "url": "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",
+    "url": "https://www.investopedia.com/rss/news.xml",
     "region": "en",
     "type": "分析",
-    "note": "财务概念解读+市场分析，适合补充背景知识"
+    "note": "财务概念解读+市场分析（旧 feedbuilder 已收费）"
   },
   {
     "name": "Yahoo Finance",
