@@ -1,0 +1,247 @@
+[
+  {
+    "name": "Reuters Business",
+    "url": "https://feeds.reuters.com/reuters/businessNews",
+    "region": "en",
+    "type": "媒体",
+    "note": "全球公司财报/并购/宏观"
+  },
+  {
+    "name": "Reuters Markets",
+    "url": "https://feeds.reuters.com/reuters/financialNewsUS",
+    "region": "en",
+    "type": "媒体",
+    "note": "金融市场动态"
+  },
+  {
+    "name": "FT",
+    "url": "https://www.ft.com/rss/home",
+    "region": "en",
+    "type": "媒体",
+    "note": "深度财经分析，部分内容有付费墙"
+  },
+  {
+    "name": "Bloomberg Markets",
+    "url": "https://feeds.bloomberg.com/markets/news.rss",
+    "region": "en",
+    "type": "媒体",
+    "note": "全球金融市场，全文需付费"
+  },
+  {
+    "name": "Bloomberg Technology",
+    "url": "https://feeds.bloomberg.com/technology/news.rss",
+    "region": "en",
+    "type": "媒体",
+    "note": "科技公司财报/并购/产品动态"
+  },
+  {
+    "name": "WSJ Markets",
+    "url": "https://feeds.content.dowjones.io/public/rss/mktw_realtimeheadlines",
+    "region": "en",
+    "type": "媒体",
+    "note": "华尔街日报市场实时头条"
+  },
+  {
+    "name": "CNBC Finance",
+    "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+    "region": "en",
+    "type": "媒体",
+    "note": "美股财经新闻，覆盖财报季动态"
+  },
+  {
+    "name": "Investopedia News",
+    "url": "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",
+    "region": "en",
+    "type": "分析",
+    "note": "财务概念解读+市场分析，适合补充背景知识"
+  },
+  {
+    "name": "Yahoo Finance",
+    "url": "https://finance.yahoo.com/news/rssindex",
+    "region": "en",
+    "type": "媒体",
+    "note": "全球财经综合，覆盖面广"
+  },
+  {
+    "name": "MarketWatch",
+    "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "region": "en",
+    "type": "媒体",
+    "note": "美股市场动态+公司新闻"
+  },
+  {
+    "name": "The Motley Fool",
+    "url": "https://www.fool.com/feed/",
+    "region": "en",
+    "type": "分析",
+    "note": "个人投资者导向的股票分析和投资建议"
+  },
+  {
+    "name": "Barron's",
+    "url": "https://www.barrons.com/feed/rss/",
+    "region": "en",
+    "type": "分析",
+    "note": "高端投资杂志，深度市场分析"
+  },
+  {
+    "name": "Morningstar",
+    "url": "https://www.morningstar.com/rss/news.xml",
+    "region": "en",
+    "type": "分析",
+    "note": "投资研究和基金分析权威机构"
+  },
+  {
+    "name": "Benzinga",
+    "url": "https://www.benzinga.com/feed",
+    "region": "en",
+    "type": "媒体",
+    "note": "实时股票新闻和交易信号"
+  },
+  {
+    "name": "TechCrunch",
+    "url": "https://techcrunch.com/feed/",
+    "region": "en",
+    "type": "媒体",
+    "note": "科技创业公司融资/产品/并购动态"
+  },
+  {
+    "name": "VentureBeat",
+    "url": "https://venturebeat.com/feed/",
+    "region": "en",
+    "type": "媒体",
+    "note": "科技商业新闻，AI/游戏/企业软件"
+  },
+  {
+    "name": "Gartner Press Releases",
+    "url": "https://www.gartner.com/en/newsroom/press-releases/rss",
+    "region": "en",
+    "type": "产业研究",
+    "note": "IT市场研究和预测，权威产业报告"
+  },
+  {
+    "name": "IDC News",
+    "url": "https://www.idc.com/about/press",
+    "region": "en",
+    "type": "产业研究",
+    "note": "IT市场数据和行业分析（需手动抓取）"
+  },
+  {
+    "name": "McKinsey Insights",
+    "url": "https://www.mckinsey.com/featured-insights/rss",
+    "region": "en",
+    "type": "产业研究",
+    "note": "战略咨询洞察，行业趋势报告"
+  },
+  {
+    "name": "东方财富资讯",
+    "url": "https://feed.eastmoney.com/news.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "A股/港股/中概资讯"
+  },
+  {
+    "name": "36氪",
+    "url": "https://36kr.com/feed",
+    "region": "zh",
+    "type": "媒体",
+    "note": "中国科技/商业/融资动态"
+  },
+  {
+    "name": "新浪财经",
+    "url": "https://rss.sina.com.cn/news/corp/focus15.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "企业新闻聚合"
+  },
+  {
+    "name": "财新网",
+    "url": "https://www.caixin.com/rss/caixinglobal.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "深度财经调查报道，高可信度"
+  },
+  {
+    "name": "第一财经",
+    "url": "https://www.yicai.com/rss/news.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "中国头部财经媒体"
+  },
+  {
+    "name": "界面新闻",
+    "url": "https://www.jiemian.com/rss/feed.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "商业/科技/资本市场报道"
+  },
+  {
+    "name": "虎嗅",
+    "url": "https://www.huxiu.com/rss/0.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "科技公司商业分析，适合互联网/OTA行业"
+  },
+  {
+    "name": "钛媒体",
+    "url": "https://www.tmtpost.com/rss.xml",
+    "region": "zh",
+    "type": "媒体",
+    "note": "科技商业深度报道和趋势分析"
+  },
+  {
+    "name": "雷锋网",
+    "url": "https://www.leiphone.com/feed",
+    "region": "zh",
+    "type": "媒体",
+    "note": "AI/智能硬件/新能源汽车行业"
+  },
+  {
+    "name": "亿欧网",
+    "url": "https://www.iyiou.com/feed",
+    "region": "zh",
+    "type": "媒体",
+    "note": "产业互联网和企业服务报道"
+  },
+  {
+    "name": "艾瑞网",
+    "url": "https://www.iresearch.cn/html/default/rss.xml",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "互联网行业数据和研究报告"
+  },
+  {
+    "name": "易观分析",
+    "url": "https://www.analysys.cn/rss.xml",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "数字经济和用户行为分析"
+  },
+  {
+    "name": "清科研究",
+    "url": "https://www.pedata.cn/rss/news.xml",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "私募股权和创投市场研究"
+  },
+  {
+    "name": "CBNData",
+    "url": "https://www.cbndata.com/feed",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "消费大数据和行业洞察报告"
+  },
+  {
+    "name": "德勤中国",
+    "url": "https://www2.deloitte.com/cn/zh/pages/about-deloitte/articles/press-releases.html",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "会计审计和商业咨询报告（需手动抓取）"
+  },
+  {
+    "name": "普华永道中国",
+    "url": "https://www.pwccn.com/zh/news.rss",
+    "region": "zh",
+    "type": "产业研究",
+    "note": "行业洞察和经济趋势报告"
+  }
+]

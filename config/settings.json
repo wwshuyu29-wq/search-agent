@@ -1,0 +1,30 @@
+{
+  "search": {
+    "max_results_per_keyword": 10,
+    "max_parallel_searches": 5,
+    "timeout_seconds": 30,
+    "enable_enterprise_search": false
+  },
+  "content_processing": {
+    "max_content_length": 50000,
+    "enable_pdf_ocr": true,
+    "enable_ku_doc": true,
+    "max_pdf_pages": 50
+  },
+  "report": {
+    "output_dir": "./output",
+    "default_format": "markdown",
+    "include_citations": true,
+    "export_to_word": false
+  },
+  "firecrawl": {
+    "enabled": true,
+    "default_limit": 5,
+    "default_lang": "en",
+    "timeout_seconds": 60
+  },
+  "human_review": {
+    "require_framework_confirmation": true,
+    "require_report_validation": false
+  }
+}
