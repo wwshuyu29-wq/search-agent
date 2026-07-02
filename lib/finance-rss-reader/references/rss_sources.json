@@ -243,5 +243,117 @@
     "region": "zh",
     "type": "产业研究",
     "note": "行业洞察和经济趋势报告"
+  },
+  {
+    "name": "华尔街见闻·全球",
+    "url": "https://rsshub.rssforever.com/wallstreetcn/news/global",
+    "region": "zh",
+    "type": "深度",
+    "note": "华尔街见闻全球市场资讯（RSSHub 热度 top-15，实测✓）"
+  },
+  {
+    "name": "华尔街见闻·A股",
+    "url": "https://rsshub.rssforever.com/wallstreetcn/news/a-stock",
+    "region": "zh",
+    "type": "深度",
+    "note": "A 股资讯与深度分析（实测✓）"
+  },
+  {
+    "name": "第一财经",
+    "url": "https://rsshub.rssforever.com/yicai/news",
+    "region": "zh",
+    "type": "深度",
+    "note": "第一财经资讯，深度经济与产业分析（实测✓）"
+  },
+  {
+    "name": "格隆汇",
+    "url": "https://rsshub.rssforever.com/gelonghui/home",
+    "region": "zh",
+    "type": "深度",
+    "note": "港股及中概股深度资讯，覆盖新股/研报/并购（实测✓）"
+  },
+  {
+    "name": "财联社·电报",
+    "url": "https://rsshub.rssforever.com/cls/telegraph",
+    "region": "zh",
+    "type": "深度",
+    "note": "A股/港股实时电报快讯（公共节点频繁 503，建议自建 RSSHub 或换用镜像；见 vendor/README.md）"
+  },
+  {
+    "name": "财联社·深度头条",
+    "url": "https://rsshub.rssforever.com/cls/depth/1000",
+    "region": "zh",
+    "type": "深度",
+    "note": "财联社深度报道-头条频道（同上，建议自建）"
+  },
+  {
+    "name": "财联社·深度公司",
+    "url": "https://rsshub.rssforever.com/cls/depth/1005",
+    "region": "zh",
+    "type": "深度",
+    "note": "上市公司深度调研（同上，建议自建）"
+  },
+  {
+    "name": "36 氪·深度",
+    "url": "https://rsshub.rssforever.com/36kr/motif/327686704642",
+    "region": "zh",
+    "type": "深度",
+    "note": "36 氪深度报道专题（同上，建议自建）"
+  },
+  {
+    "name": "第一财经杂志",
+    "url": "https://rsshub.rssforever.com/cbnweek/latest",
+    "region": "zh",
+    "type": "深度",
+    "note": "第一财经杂志深度商业报道（同上，建议自建）"
+  },
+  {
+    "name": "经济观察报",
+    "url": "https://rsshub.rssforever.com/eeo/news",
+    "region": "zh",
+    "type": "深度",
+    "note": "经济观察报新闻聚合（同上，建议自建）"
+  },
+  {
+    "name": "财经十一人",
+    "url": "https://rsshub.rssforever.com/wechat/ce/caijing11",
+    "region": "zh",
+    "type": "深度",
+    "note": "《财经》杂志公司产业报道团队深度稿（微信公众号源需自建 RSSHub）"
+  },
+  {
+    "name": "晚点 LatePost",
+    "url": "https://rsshub.rssforever.com/latepost/lastest",
+    "region": "zh",
+    "type": "深度",
+    "note": "晚点 LatePost 深度商业报道，AI/新消费/大厂动态（需自建 RSSHub）"
+  },
+  {
+    "name": "远川研究所",
+    "url": "https://rsshub.rssforever.com/wechat/ce/yuanchuan-research",
+    "region": "zh",
+    "type": "深度",
+    "note": "远川研究所深度产业研究，芯片/新能源/医药硬科技（需自建 RSSHub）"
+  },
+  {
+    "name": "雪球·今日话题",
+    "url": "https://rsshub.rssforever.com/xueqiu/today",
+    "region": "zh",
+    "type": "深度",
+    "note": "雪球今日话题精选，个股/宏观/策略讨论（公共节点 503，建议自建）"
+  },
+  {
+    "name": "巴伦周刊中文版",
+    "url": "https://rsshub.rssforever.com/barronschina/columns",
+    "region": "zh",
+    "type": "深度",
+    "note": "Barron's 中文版，全球市场投资高端分析（建议自建）"
+  },
+  {
+    "name": "每日经济新闻·原创",
+    "url": "https://rsshub.rssforever.com/nbd/daily",
+    "region": "zh",
+    "type": "深度",
+    "note": "每日经济新闻重磅原创深度稿件（建议自建）"
   }
 ]
