@@ -154,6 +154,50 @@ Step 3：金字塔调研报告生成
 - 只问风险 → 叠加 SWOT 决策矩阵 + Altman Z
 - 只问估值 → 叠加 护城河 + 杜邦
 
+### 关键词自动扩展（Step 0 强制执行，参考 news-aggregator-skill）
+
+用户输入的关键词往往过窄，直接搜会漏 60% 相关内容。审核卡片里除了列出用户原词，**必须同时给出扩展词族**（同义词 / 缩写 / 上位词 / 相关技术栈）。
+
+| 用户原词 | 建议扩展词族 |
+|---|---|
+| AI | AI, LLM, GPT, Claude, Gemini, Generative, Machine Learning, RAG, Agent, 大模型 |
+| 云计算 | Cloud, IaaS, PaaS, SaaS, Kubernetes, AWS, Azure, GCP, 阿里云, 腾讯云 |
+| 电动车 | EV, BEV, PHEV, 新能源汽车, 电池, 电动汽车, Tesla, BYD, 蔚小理 |
+| 芯片 | Chip, Semiconductor, 半导体, GPU, ASIC, 制程, 代工, TSMC, 中芯国际 |
+| 财报 | Earnings, Quarterly Report, 10-K, 10-Q, 年报, 季报, 财务报表, EPS |
+| 消费 | Consumer, Retail, DTC, 消费品, 零售, FMCG, 快消, GMV, ARPU |
+| 医药 | Pharma, Biotech, 生物医药, 创新药, PD-1, mRNA, FDA, NDA, 临床试验 |
+| Web3 | Web3, Crypto, DeFi, NFT, 链, 区块链, DAO, Token |
+| SaaS | SaaS, ARR, MRR, LTV, CAC, Net Retention, ACV, PLG |
+| 出海 | Overseas, Global, 出海, 跨境, Cross-border, Localization, GTM |
+
+**规则**：
+1. 用户给的中文词自动补对应英文；反之亦然
+2. 领域缩写自动补全称（LLM ↔ Large Language Model）
+3. 关键上下游 / 竞对品牌名一起纳入
+4. 词族数量控制在 5-10 个之间，避免噪音
+5. 特别专有名词（如具体公司名 / 型号 / 事件名）**不扩展**，只精确匹配
+
+## Layer 5b：news-aggregator 实时热点扫描（可选）
+
+除了 Layer 5 财经 RSS 之外，遇到以下场景**追加**调用 news-aggregator-skill：
+
+- 用户问"最近有什么大新闻 / 今天热点 / 大家在聊什么"
+- 调研主题需要**社交情绪面**证据（微博热搜 / V2EX 讨论 / HN 讨论）
+- 需要**开源生态**证据（GitHub Trending / Product Hunt）
+
+调用示例：
+
+```bash
+python3 ~/.comate/skills/news-aggregator-skill/scripts/fetch_news.py \
+    --source hackernews,weibo,v2ex,36kr,wallstreetcn \
+    --limit 15 \
+    --keyword "<扩展词族用逗号连接>" \
+    --deep
+```
+
+输出条目以 `SOC###` 前缀追加进 Step 1 的 YAML 源清单，`confidence=low`（社交源仅作情绪信号，不作事实断言）。
+
 ### 金融 × 营销混合题识别与路由（关键）
 
 很多真实调研既是金融题也是营销题，例如：
@@ -238,6 +282,18 @@ Step 3：金字塔调研报告生成
 ## Step 1：多源分层信息检索
 
 用户确认审核卡片后执行。**按置信度分层**调用工具，最终产出统一的 YAML 源清单。
+
+> **平台矩阵已扩展到 40+ 渠道**（英文/中文/垂直财经/社交/学术/政府数据/结构化 API），完整清单和场景组合速查见 `references/search-platforms.md`。下面工具矩阵仅列常用 8 个入口。
+
+### RSS 抓取双模式（对齐 `lib/finance-rss-reader/SKILL.md`）
+
+- **Mode A 手动**：用户直接问"帮我看看 XX 最近的行业动态 / 分析师观点 / 监管动态"→ 单独触发 `lib/finance-rss-reader`
+- **Mode B workflow**：Step 1 结束前静默调用，参数 `keywords, ticker, days=14, mode=workflow`，输出以 `S_RSS###` 追加到 YAML 源清单
+- 抓取规则：`relevance_score >= 0.6` 才做全文；每次最多 5 篇；全文抓取走 `skill realtime-search fetch <URL> --max-chars 8000`
+
+### 免 Docker 的 RSS 获取方案
+
+公共 RSSHub 503/403 常态化。默认方案：**能直接拿原生 RSS 的走 feedparser，拿不到的（微博/知乎/雪球/B站/小红书 等）走 Firecrawl 抓正文**，完全绕开 RSSHub。同事只需 `FIRECRAWL_API_KEY`，零运维。详见 `lib/finance-rss-reader/references/RSSHUB_SELFHOST.md`。
 
 ### Layer 6：垂直专家 skill（新增）
 
@@ -385,10 +441,15 @@ sources:
 - `FC###` = Firecrawl
 - `RS###` = realtime-search
 - `BD###` = baidu-search
-- `RSS###` = finance-rss-reader
+- `RSS###` / `S_RSS###` = finance-rss-reader
 - `ES###` = enterprise-search
 - `KU###` = ku-doc-manage
-全局唯一。
+- `FIN###` = finance-skills 结构化数据
+- `MKT###` = marketing-skills 结构化情报
+- `SOC###` = 社交平台（微博/知乎/雪球/Reddit/X 等）
+- `ACA###` = 学术/论文（arXiv/CNKI/SSRN/Scholar）
+- `DAT###` = 政府/统计/结构化 API（AKShare/yfinance/EDGAR/统计局）
+全局唯一。完整平台清单及触发方式见 `references/search-platforms.md`。
 
 ---
 

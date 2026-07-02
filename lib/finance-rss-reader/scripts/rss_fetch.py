@@ -4,13 +4,27 @@ finance-rss-reader: 财经 RSS 拉取与关键词过滤脚本
 依赖：标准库 urllib (无外部依赖)
 """
 import argparse
+import concurrent.futures
 import json
+import os
+import subprocess
 import sys
 import re
 from datetime import datetime, timezone, timedelta
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 import ssl
+
+# 允许通过环境变量覆盖 Firecrawl 脚本路径；默认相对本 skill 定位到项目根 scripts/
+_DEFAULT_FIRECRAWL = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'scripts', 'firecrawl_search.py'
+)
+FIRECRAWL_SCRIPT = os.environ.get('FIRECRAWL_SCRIPT', _DEFAULT_FIRECRAWL)
+
+# news-aggregator-skill 的 fetch_news.py 路径（用于直连 JSON API 场景）
+_DEFAULT_NEWSAGG = os.path.expanduser('~/.comate/skills/news-aggregator-skill/scripts/fetch_news.py')
+NEWSAGG_SCRIPT = os.environ.get('NEWSAGG_SCRIPT', _DEFAULT_NEWSAGG)
 
 def load_sources(config_path):
     """加载 RSS 源配置"""
@@ -200,6 +214,118 @@ def build_seekingalpha_url(ticker):
     """构建 SeekingAlpha RSS URL"""
     return f"https://seekingalpha.com/api/sa/combined/{ticker.upper()}.xml"
 
+def fetch_via_firecrawl(source, keywords, days, limit=8):
+    """
+    对 fetcher=firecrawl 的源，用 Firecrawl 抓正文，映射成 RSS item 结构。
+
+    读取源配置里的 query_template（占位符 {keywords}），若缺失则退回 site:域名 + 关键词。
+    """
+    if not os.path.exists(FIRECRAWL_SCRIPT):
+        print(f"[WARN] firecrawl script not found: {FIRECRAWL_SCRIPT}", file=sys.stderr)
+        return []
+
+    kw_str = ' '.join(keywords)
+    template = source.get('query_template')
+    if template:
+        query = template.replace('{keywords}', kw_str)
+    else:
+        # 兜底：从 url 字段抠 host 拼 site:
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(source.get('url', '')).netloc or ''
+        except Exception:
+            host = ''
+        query = f"site:{host} {kw_str}".strip() if host else kw_str
+
+    try:
+        proc = subprocess.run(
+            ['python3', FIRECRAWL_SCRIPT,
+             '--query', query,
+             '--limit', str(limit),
+             '--lang', 'zh' if source.get('region') == 'zh' else 'en'],
+            capture_output=True, text=True, timeout=60
+        )
+        if proc.returncode != 0:
+            print(f"[WARN] firecrawl exit {proc.returncode} for {source.get('name')}: {proc.stderr[:200]}", file=sys.stderr)
+            return []
+        data = json.loads(proc.stdout or '[]')
+    except subprocess.TimeoutExpired:
+        print(f"[WARN] firecrawl timeout for {source.get('name')}", file=sys.stderr)
+        return []
+    except json.JSONDecodeError as e:
+        print(f"[WARN] firecrawl bad JSON for {source.get('name')}: {e}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"[WARN] firecrawl error for {source.get('name')}: {e}", file=sys.stderr)
+        return []
+
+    # 归一化到 RSS item 结构
+    items = []
+    records = data if isinstance(data, list) else data.get('results', [])
+    for rec in records:
+        title = (rec.get('title') or '').strip()
+        url = (rec.get('url') or '').strip()
+        if not title or not url.startswith('http'):
+            continue
+        items.append({
+            'title': title,
+            'url': url,
+            'published': (rec.get('publish_date') or rec.get('published') or '')[:25],
+            'summary': (rec.get('description') or rec.get('summary') or '')[:300],
+        })
+    return items
+
+def fetch_via_newsagg(source, keywords, days, limit=15):
+    """
+    对 fetcher=newsagg 的源，复用 news-aggregator-skill 的 fetch_news.py 直连 JSON API。
+
+    source 需包含 newsagg_source 字段，例如 'wallstreetcn' / '36kr' / 'weibo' / 'hackernews'。
+    """
+    if not os.path.exists(NEWSAGG_SCRIPT):
+        print(f"[WARN] news-aggregator script not found: {NEWSAGG_SCRIPT}", file=sys.stderr)
+        return []
+
+    subsource = source.get('newsagg_source')
+    if not subsource:
+        print(f"[WARN] missing newsagg_source in {source.get('name')}", file=sys.stderr)
+        return []
+
+    # 注意：news-aggregator 的 --keyword 过滤使用 \b 词边界，对中文关键词会全部漏掉，
+    # 因此这里不下发 --keyword，让 rss_fetch 自己的 relevance_score() 处理过滤。
+    cmd = [sys.executable, NEWSAGG_SCRIPT, '--source', subsource, '--limit', str(limit)]
+    if False and keywords:  # 保留结构；如需下发词过滤请自行开启
+        cmd += ['--keyword', ','.join(keywords)]
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+        if proc.returncode != 0:
+            print(f"[WARN] newsagg exit {proc.returncode} for {source.get('name')}: {proc.stderr[:200]}", file=sys.stderr)
+            return []
+        data = json.loads(proc.stdout or '[]')
+    except subprocess.TimeoutExpired:
+        print(f"[WARN] newsagg timeout for {source.get('name')}", file=sys.stderr)
+        return []
+    except json.JSONDecodeError as e:
+        print(f"[WARN] newsagg bad JSON for {source.get('name')}: {e}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"[WARN] newsagg error for {source.get('name')}: {e}", file=sys.stderr)
+        return []
+
+    items = []
+    for rec in data:
+        title = (rec.get('title') or '').strip()
+        url = (rec.get('url') or '').strip()
+        if not title or not url.startswith('http'):
+            continue
+        items.append({
+            'title': title,
+            'url': url,
+            'published': (rec.get('time') or '')[:25],
+            'summary': (rec.get('content') or '')[:300],
+        })
+    return items
+
 def main():
     parser = argparse.ArgumentParser(description='财经 RSS 拉取与过滤')
     parser.add_argument('--keywords', required=True, help='关键词，逗号分隔')
@@ -229,36 +355,56 @@ def main():
 
     results = []
     success_count = 0
+    firecrawl_count = 0
 
-    for idx, source in enumerate(sources, 1):
+    def _fetch_one(source):
+        """处理单个源，返回 (source_name, fetcher, items)"""
         source_name = source.get('name', 'Unknown')
-        print(f"[{idx}/{len(sources)}] Fetching {source_name}...", file=sys.stderr)
+        fetcher = source.get('fetcher', 'rss')
+        if fetcher == 'firecrawl':
+            items = fetch_via_firecrawl(source, keywords, args.days)
+        elif fetcher == 'newsagg':
+            items = fetch_via_newsagg(source, keywords, args.days)
+        else:
+            xml = fetch_rss(source['url'])
+            items = parse_rss_simple(xml, source_name) if xml else []
+        return source_name, fetcher, items
 
-        xml = fetch_rss(source['url'])
-        if not xml:
-            continue
-
-        items = parse_rss_simple(xml, source_name)
-        print(f"  -> Parsed {len(items)} items", file=sys.stderr)
-
-        success_count += 1
-
-        for item in items:
-            if not is_within_days(item['published'], args.days):
+    # 并发抓取（参考 news-aggregator ThreadPoolExecutor(10)）
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        future_to_src = {pool.submit(_fetch_one, s): s for s in sources}
+        for idx, future in enumerate(concurrent.futures.as_completed(future_to_src), 1):
+            source = future_to_src[future]
+            try:
+                source_name, fetcher, items = future.result()
+            except Exception as e:
+                print(f"[WARN] fetch error for {source.get('name')}: {e}", file=sys.stderr)
                 continue
 
-            score = relevance_score(item, keywords)
-            if score >= args.min_score:
-                item['source'] = source_name
-                item['region'] = source.get('region', 'unknown')
-                item['source_type'] = source.get('type', '媒体')
-                item['relevance_score'] = round(score, 2)
-                results.append(item)
+            print(f"[{idx}/{len(sources)}] {source_name} (fetcher={fetcher}) -> {len(items)} items", file=sys.stderr)
+            if not items:
+                continue
+            success_count += 1
+            if fetcher == 'firecrawl':
+                firecrawl_count += 1
+
+            for item in items:
+                if not is_within_days(item['published'], args.days):
+                    continue
+
+                score = relevance_score(item, keywords)
+                if score >= args.min_score:
+                    item['source'] = source_name
+                    item['region'] = source.get('region', 'unknown')
+                    item['source_type'] = source.get('type', '媒体')
+                    item['fetcher'] = fetcher
+                    item['relevance_score'] = round(score, 2)
+                    results.append(item)
 
     # 按相关性降序
     results.sort(key=lambda x: x['relevance_score'], reverse=True)
 
-    print(f"[INFO] Fetched from {success_count}/{len(sources)} sources, {len(results)} relevant items", file=sys.stderr)
+    print(f"[INFO] Fetched from {success_count}/{len(sources)} sources ({firecrawl_count} via Firecrawl), {len(results)} relevant items", file=sys.stderr)
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
 if __name__ == '__main__':

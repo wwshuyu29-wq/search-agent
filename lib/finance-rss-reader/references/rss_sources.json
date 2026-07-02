@@ -4,6 +4,7 @@
     "url": "https://www.reuters.com/business/feed/",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "全球公司财报/并购/宏观（feeds.reuters.com 已停用，改用主域）"
   },
   {
@@ -11,6 +12,7 @@
     "url": "https://www.reuters.com/markets/feed/",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "金融市场动态"
   },
   {
@@ -18,6 +20,7 @@
     "url": "https://www.ft.com/rss/home",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "深度财经分析，部分内容有付费墙"
   },
   {
@@ -25,6 +28,7 @@
     "url": "https://feeds.bloomberg.com/markets/news.rss",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "全球金融市场，全文需付费"
   },
   {
@@ -32,6 +36,7 @@
     "url": "https://feeds.bloomberg.com/technology/news.rss",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "科技公司财报/并购/产品动态"
   },
   {
@@ -39,6 +44,7 @@
     "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "华尔街日报市场版（旧 mktw feed 已 404）"
   },
   {
@@ -46,6 +52,7 @@
     "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "美股财经新闻，覆盖财报季动态"
   },
   {
@@ -53,6 +60,7 @@
     "url": "https://www.investopedia.com/rss/news.xml",
     "region": "en",
     "type": "分析",
+    "fetcher": "rss",
     "note": "财务概念解读+市场分析（旧 feedbuilder 已收费）"
   },
   {
@@ -60,6 +68,7 @@
     "url": "https://finance.yahoo.com/news/rssindex",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "全球财经综合，覆盖面广"
   },
   {
@@ -67,6 +76,7 @@
     "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "美股市场动态+公司新闻"
   },
   {
@@ -74,6 +84,7 @@
     "url": "https://www.fool.com/feed/",
     "region": "en",
     "type": "分析",
+    "fetcher": "rss",
     "note": "个人投资者导向的股票分析和投资建议"
   },
   {
@@ -81,6 +92,7 @@
     "url": "https://www.barrons.com/feed/rss/",
     "region": "en",
     "type": "分析",
+    "fetcher": "rss",
     "note": "高端投资杂志，深度市场分析"
   },
   {
@@ -88,6 +100,7 @@
     "url": "https://www.morningstar.com/rss/news.xml",
     "region": "en",
     "type": "分析",
+    "fetcher": "rss",
     "note": "投资研究和基金分析权威机构"
   },
   {
@@ -95,6 +108,7 @@
     "url": "https://www.benzinga.com/feed",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "实时股票新闻和交易信号"
   },
   {
@@ -102,6 +116,7 @@
     "url": "https://techcrunch.com/feed/",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "科技创业公司融资/产品/并购动态"
   },
   {
@@ -109,6 +124,7 @@
     "url": "https://venturebeat.com/feed/",
     "region": "en",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "科技商业新闻，AI/游戏/企业软件"
   },
   {
@@ -116,6 +132,7 @@
     "url": "https://www.gartner.com/en/newsroom/press-releases/rss",
     "region": "en",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "IT市场研究和预测，权威产业报告"
   },
   {
@@ -123,13 +140,16 @@
     "url": "https://www.idc.com/about/press",
     "region": "en",
     "type": "产业研究",
-    "note": "IT市场数据和行业分析（需手动抓取）"
+    "fetcher": "firecrawl",
+    "query_template": "site:idc.com press release {keywords}",
+    "note": "IDC 无原生 RSS，改走 Firecrawl 定向抓取新闻稿"
   },
   {
     "name": "McKinsey Insights",
     "url": "https://www.mckinsey.com/featured-insights/rss",
     "region": "en",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "战略咨询洞察，行业趋势报告"
   },
   {
@@ -137,6 +157,7 @@
     "url": "https://feed.eastmoney.com/news.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "A股/港股/中概资讯"
   },
   {
@@ -144,6 +165,7 @@
     "url": "https://36kr.com/feed",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "中国科技/商业/融资动态"
   },
   {
@@ -151,6 +173,7 @@
     "url": "https://rss.sina.com.cn/news/corp/focus15.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "企业新闻聚合"
   },
   {
@@ -158,6 +181,7 @@
     "url": "https://www.caixin.com/rss/caixinglobal.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "深度财经调查报道，高可信度"
   },
   {
@@ -165,6 +189,7 @@
     "url": "https://www.yicai.com/rss/news.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "中国头部财经媒体"
   },
   {
@@ -172,6 +197,7 @@
     "url": "https://www.jiemian.com/rss/feed.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "商业/科技/资本市场报道"
   },
   {
@@ -179,6 +205,7 @@
     "url": "https://www.huxiu.com/rss/0.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "科技公司商业分析，适合互联网/OTA行业"
   },
   {
@@ -186,6 +213,7 @@
     "url": "https://www.tmtpost.com/rss.xml",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "科技商业深度报道和趋势分析"
   },
   {
@@ -193,6 +221,7 @@
     "url": "https://www.leiphone.com/feed",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "AI/智能硬件/新能源汽车行业"
   },
   {
@@ -200,6 +229,7 @@
     "url": "https://www.iyiou.com/feed",
     "region": "zh",
     "type": "媒体",
+    "fetcher": "rss",
     "note": "产业互联网和企业服务报道"
   },
   {
@@ -207,6 +237,7 @@
     "url": "https://www.iresearch.cn/html/default/rss.xml",
     "region": "zh",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "互联网行业数据和研究报告"
   },
   {
@@ -214,6 +245,7 @@
     "url": "https://www.analysys.cn/rss.xml",
     "region": "zh",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "数字经济和用户行为分析"
   },
   {
@@ -221,6 +253,7 @@
     "url": "https://www.pedata.cn/rss/news.xml",
     "region": "zh",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "私募股权和创投市场研究"
   },
   {
@@ -228,6 +261,7 @@
     "url": "https://www.cbndata.com/feed",
     "region": "zh",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "消费大数据和行业洞察报告"
   },
   {
@@ -235,125 +269,157 @@
     "url": "https://www2.deloitte.com/cn/zh/pages/about-deloitte/articles/press-releases.html",
     "region": "zh",
     "type": "产业研究",
-    "note": "会计审计和商业咨询报告（需手动抓取）"
+    "fetcher": "firecrawl",
+    "query_template": "site:www2.deloitte.com/cn 新闻稿 {keywords}",
+    "note": "德勤中国无原生 RSS，改走 Firecrawl 抓 press-releases 页"
   },
   {
     "name": "普华永道中国",
     "url": "https://www.pwccn.com/zh/news.rss",
     "region": "zh",
     "type": "产业研究",
+    "fetcher": "rss",
     "note": "行业洞察和经济趋势报告"
   },
   {
     "name": "华尔街见闻·全球",
-    "url": "https://rsshub.rssforever.com/wallstreetcn/news/global",
+    "url": "https://api-one.wallstcn.com/apiv1/content/information-flow?channel=global-channel&accept=article&limit=30",
     "region": "zh",
     "type": "深度",
-    "note": "华尔街见闻全球市场资讯（RSSHub 热度 top-15，实测✓）"
+    "fetcher": "newsagg",
+    "newsagg_source": "wallstreetcn",
+    "note": "改走 news-aggregator 直连内部 JSON API（比 RSSHub 快 5x，不占 Firecrawl 额度）"
   },
   {
     "name": "华尔街见闻·A股",
     "url": "https://rsshub.rssforever.com/wallstreetcn/news/a-stock",
     "region": "zh",
     "type": "深度",
-    "note": "A 股资讯与深度分析（实测✓）"
+    "fetcher": "rss",
+    "note": "A 股资讯与深度分析（公共 RSSHub 稳定，保留）"
   },
   {
-    "name": "第一财经",
+    "name": "第一财经 RSSHub",
     "url": "https://rsshub.rssforever.com/yicai/news",
     "region": "zh",
     "type": "深度",
-    "note": "第一财经资讯，深度经济与产业分析（实测✓）"
+    "fetcher": "rss",
+    "note": "第一财经资讯 RSSHub 版（公共节点稳定）"
   },
   {
     "name": "格隆汇",
     "url": "https://rsshub.rssforever.com/gelonghui/home",
     "region": "zh",
     "type": "深度",
-    "note": "港股及中概股深度资讯，覆盖新股/研报/并购（实测✓）"
+    "fetcher": "rss",
+    "note": "港股及中概股深度资讯（公共 RSSHub 稳定）"
   },
   {
     "name": "财联社·电报",
-    "url": "https://rsshub.rssforever.com/cls/telegraph",
+    "url": "https://www.cls.cn/telegraph",
     "region": "zh",
     "type": "深度",
-    "note": "A股/港股实时电报快讯（公共节点频繁 503，建议自建 RSSHub 或换用镜像；见 vendor/README.md）"
+    "fetcher": "firecrawl",
+    "query_template": "site:cls.cn/telegraph {keywords}",
+    "note": "A股/港股实时电报快讯（公共 RSSHub 503，改走 Firecrawl 抓官网）"
   },
   {
     "name": "财联社·深度头条",
-    "url": "https://rsshub.rssforever.com/cls/depth/1000",
+    "url": "https://www.cls.cn/depth/1000",
     "region": "zh",
     "type": "深度",
-    "note": "财联社深度报道-头条频道（同上，建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:cls.cn 深度头条 {keywords}",
+    "note": "财联社深度报道-头条（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "财联社·深度公司",
-    "url": "https://rsshub.rssforever.com/cls/depth/1005",
+    "url": "https://www.cls.cn/depth/1005",
     "region": "zh",
     "type": "深度",
-    "note": "上市公司深度调研（同上，建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:cls.cn 深度公司 {keywords}",
+    "note": "上市公司深度调研（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "36 氪·深度",
-    "url": "https://rsshub.rssforever.com/36kr/motif/327686704642",
+    "url": "https://36kr.com/newsflashes",
     "region": "zh",
     "type": "深度",
-    "note": "36 氪深度报道专题（同上，建议自建）"
+    "fetcher": "newsagg",
+    "newsagg_source": "36kr",
+    "note": "改走 news-aggregator 抓 36kr 快讯列表（直连 HTML，比 Firecrawl 快）"
   },
   {
     "name": "第一财经杂志",
-    "url": "https://rsshub.rssforever.com/cbnweek/latest",
+    "url": "https://www.cbnweek.com/",
     "region": "zh",
     "type": "深度",
-    "note": "第一财经杂志深度商业报道（同上，建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:cbnweek.com {keywords}",
+    "note": "第一财经周刊深度商业报道（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "经济观察报",
-    "url": "https://rsshub.rssforever.com/eeo/news",
+    "url": "https://www.eeo.com.cn/",
     "region": "zh",
     "type": "深度",
-    "note": "经济观察报新闻聚合（同上，建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:eeo.com.cn {keywords}",
+    "note": "经济观察报（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "财经十一人",
-    "url": "https://rsshub.rssforever.com/wechat/ce/caijing11",
+    "url": "https://mp.weixin.qq.com/",
     "region": "zh",
     "type": "深度",
-    "note": "《财经》杂志公司产业报道团队深度稿（微信公众号源需自建 RSSHub）"
+    "fetcher": "firecrawl",
+    "query_template": "site:mp.weixin.qq.com 财经十一人 {keywords}",
+    "note": "《财经》杂志公司产业报道团队（微信公众号，改走 Firecrawl + Sogou 检索）"
   },
   {
     "name": "晚点 LatePost",
-    "url": "https://rsshub.rssforever.com/latepost/lastest",
+    "url": "https://www.latepost.com/",
     "region": "zh",
     "type": "深度",
-    "note": "晚点 LatePost 深度商业报道，AI/新消费/大厂动态（需自建 RSSHub）"
+    "fetcher": "firecrawl",
+    "query_template": "site:latepost.com {keywords}",
+    "note": "晚点 LatePost 深度商业报道（改走 Firecrawl 抓官网）"
   },
   {
     "name": "远川研究所",
-    "url": "https://rsshub.rssforever.com/wechat/ce/yuanchuan-research",
+    "url": "https://mp.weixin.qq.com/",
     "region": "zh",
     "type": "深度",
-    "note": "远川研究所深度产业研究，芯片/新能源/医药硬科技（需自建 RSSHub）"
+    "fetcher": "firecrawl",
+    "query_template": "site:mp.weixin.qq.com 远川研究所 {keywords}",
+    "note": "远川研究所深度产业研究（微信公众号，改走 Firecrawl + Sogou 检索）"
   },
   {
     "name": "雪球·今日话题",
-    "url": "https://rsshub.rssforever.com/xueqiu/today",
+    "url": "https://xueqiu.com/",
     "region": "zh",
     "type": "深度",
-    "note": "雪球今日话题精选，个股/宏观/策略讨论（公共节点 503，建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:xueqiu.com 今日话题 {keywords}",
+    "note": "雪球今日话题精选（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "巴伦周刊中文版",
-    "url": "https://rsshub.rssforever.com/barronschina/columns",
+    "url": "https://www.barronschina.com.cn/",
     "region": "zh",
     "type": "深度",
-    "note": "Barron's 中文版，全球市场投资高端分析（建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:barronschina.com.cn {keywords}",
+    "note": "Barron's 中文版（公共 RSSHub 503，改走 Firecrawl）"
   },
   {
     "name": "每日经济新闻·原创",
-    "url": "https://rsshub.rssforever.com/nbd/daily",
+    "url": "https://www.nbd.com.cn/",
     "region": "zh",
     "type": "深度",
-    "note": "每日经济新闻重磅原创深度稿件（建议自建）"
+    "fetcher": "firecrawl",
+    "query_template": "site:nbd.com.cn 原创 {keywords}",
+    "note": "每日经济新闻重磅原创（公共 RSSHub 503，改走 Firecrawl）"
   }
 ]
