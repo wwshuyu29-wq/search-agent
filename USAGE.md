@@ -42,7 +42,41 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 
 ---
 
+## 全流程逻辑一览（先看这个再往下）
+
+一个调研任务被拆成 6 个阶段，不是随便拆的——每个阶段解决的是一个**独立会犯错的环节**，前一步没到位后面必然翻车。
+
+```
+[t1] 需求理解 & 框架审核    → 解决"没想清楚在问什么就开搜"的问题
+    ↓
+[t2] 多源分层信息检索       → 解决"只搜一处就下结论"的问题
+    ↓
+[t3] 结构化分析             → 解决"堆资料不出观点"的问题
+    ↓
+[t4] 金字塔报告生成         → 解决"读者看不到要点"的问题
+    ↓
+[t5] 人工终审 & 修订        → 解决"AI 幻觉与我方视角错位"的问题
+    ↓
+[t6] 后续行动衔接（可选）    → 解决"调研做完就烂在文件夹里"的问题
+```
+
+**每个阶段的分工原则：**
+- 需要"判断价值观 / 领域 know-how"的部分 → 你来
+- 需要"重复劳动 / 大量并发 / 格式规整"的部分 → Codex 来
+- 存在"如果 AI 决定错了成本很高"的选择 → 强制人工闸门
+
+**为什么 skill 要分这么细：**
+- 每个 skill 都是一个**已经封装好的领域打法**（例：`marketing/customer-research` 内置了 JTBD 访谈脚本、`marketing/competitor-profiling` 内置了竞对档案的 12 个必查字段）
+- 让通用 LLM 直接推理这些内容会漏项、格式不稳定、且没有"专家该做的动作"（例：LLM 直接写"竞品分析"，它不会主动去查融资和团队变动）
+- 走 skill = 强制 Codex 按专家清单动作，结果稳定 + 覆盖度高
+
+---
+
 ## t1 — 需求理解 & 框架审核
+
+**这一阶段在做什么：** 把用户的一句话需求，翻译成"用哪个分析框架 + 拆成哪几个维度 + 用哪些关键词 + 从哪些源找"。
+
+**为什么必须先做这一步：** 90% 的调研翻车都发生在"没搞清楚在调研什么"就开始搜。同样一句"调研高德地图"，可能是问"新功能"、"用户口碑"、"财务表现"、"增长打法"——不同意图对应完全不同的信息源和分析框架。这一步就是把模糊需求变成可执行的调研 spec。
 
 **你来做：**
 - 告诉 Codex 调研需求。示例：
@@ -77,17 +111,26 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
   - "车机" → IVI, HUD, CarPlay, Android Auto, 鸿蒙座舱, 车联网
 - 遇到"金融×营销混合题"（如"高德 IPO 前值不值得买"）会请你选视角
 
-**调用的 Skill：**
-- **search-agent** 内核 — 意图识别 + 框架推荐
-- **brainstorming** — 需求模糊时追问
-- **marketing/marketing-ideas** — 你说"帮我想想调研角度"时先发散
-- **marketing/customer-research** — JTBD / 用户画像相关时挂载
+**调用的 Skill 及作用：**
+
+| Skill | 它做什么 | 为什么这一步要用它 |
+|---|---|---|
+| **search-agent 内核**（`lib/intent_classifier.py` + `frameworks.py`）| 关键词打分 + 优先级加权 → 从 31 个框架里选 Top 3 | 通用 LLM 会"什么都推荐一点"，内核有硬编码的打分逻辑，稳定输出可复现 |
+| **brainstorming** | 强制 Codex 在动手前先追问澄清（用户目标 / 输出形式 / 边界） | 防止 LLM 一上来就闷头做，Brief 不清晰的调研必然翻车 |
+| **marketing/marketing-ideas** | 生成 5-10 个调研角度 | 你说"帮我想想怎么调研"时用，比 LLM 自由发挥更成体系 |
+| **marketing/customer-research** | 预挂载 JTBD 访谈框架 | 命中"用户为什么用 XX"类问题时，提前把 JTBD 模板准备好 |
 
 **⛳ 闸门①：你必须回复"确认"或修改意见，Codex 才会开始搜索。**
 
 ---
 
 ## t2 — 多源分层信息检索（这一步是重点）
+
+**这一阶段在做什么：** 按"官方 → 深度媒体 → UGC → 应用商店 → 热榜/RSS → 内网"六层顺序并行抓取，去重后整理成统一 YAML 源清单。
+
+**为什么必须分层：** 同一个事实在不同源出现，可信度差距很大。例：`高德日活 X 亿`这句话，出自高德官方财报 vs 极客公园文章 vs 微博评论——如果不分层，LLM 会把三者混着用，报告的置信度就崩了。分层的核心目的是**让"官方数字"永远压过"UGC 情绪"**，且冲突时能追溯到源头。
+
+**为什么并发抓取：** 51 个 RSS 源顺序抓要 3-5 分钟，用 `ThreadPoolExecutor(8)` 并发降到 30 秒左右。这不是优化，是可用性——LLM 会话上下文有超时限制，必须快。
 
 **你来做：**
 - 通常无需操作，等 Codex 汇总
@@ -120,21 +163,24 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 
 **抓取规则：** `relevance_score >= 0.6` 才做全文，每次最多 5 篇。
 
-**调用的 Skill：**
-- **firecrawl_search.py** — 英文深度、JS 渲染、官方 blog、Reddit
-- **realtime-search** — Brave 官方 + 百度中文
-- **baidu-search** — 中文兜底
-- **finance-rss-reader** — 51 个 RSS 源 + Firecrawl 补齐社交源（微博/知乎/雪球/B站/小红书）
-- **news-aggregator-skill** — 8 大热榜（HN / 微博 / V2EX / GitHub / PH / 36氪 / 华尔街见闻 / 腾讯）
-- **agent-reach** — 小红书 / B站 / Reddit / LinkedIn 定向抓取
-- **marketing/competitor-profiling** — 竞对完整档案（定位 / GTM / 团队 / 融资）
-- **marketing/customer-research** — 用户访谈 / JTBD
-- **marketing/directory-submissions** — Product Hunt / G2 / Capterra 情报
-- **enterprise-search + ku-doc-manage** — 内网研究报告（仅内网）
+**调用的 Skill 及作用：**
+
+| Skill | 它做什么 | 为什么这一步要用它 |
+|---|---|---|
+| **firecrawl_search.py** | 走 Firecrawl API，做**英文深度 + JS 渲染 + 反爬 IP 池**的搜索 | Seeking Alpha / Reddit / TechCrunch / 竞品官方 blog 大多是 JS 渲染或有反爬，普通 requests 拿不到，Firecrawl 是目前最省事的方案 |
+| **realtime-search** | Brave 引擎（英文）+ 百度引擎（中文），支持 `site:` / `filetype:pdf` 定向 | 官方一手信息（IR PDF / release notes / 白皮书）用它最快，百度引擎对中文长尾内容覆盖最好 |
+| **baidu-search** | Baidu AI 搜索的原生结果 | realtime-search 空结果时的兜底，对贴吧/百科/中文冷门内容有优势 |
+| **finance-rss-reader**（`lib/finance-rss-reader`）| 51 个财经/科技/深度 RSS 源并发抓取 + 关键词打分过滤 + 相关度 ≥0.6 才做全文 | 竞品新闻和行业动态**每天都在变**，搜索引擎收录慢；RSS 是被动订阅式，能拿到当天甚至当小时的更新。且 51 个源覆盖了我们内部很难人肉盯完的深度媒体 |
+| **news-aggregator-skill**（8 大热榜）| 直连 HN / 微博 / V2EX / GitHub Trending / Product Hunt / 36氪 / 华尔街见闻 / 腾讯 的**内部 API** | 这些平台没有原生 RSS 或 RSSHub 常态 503，直连 API 比 Firecrawl 快 5x，且不消耗 Firecrawl 额度。**竞品发布首日**用它扫社交扩散量最有效 |
+| **agent-reach** | 小红书 / B站 / Reddit / LinkedIn / 知乎 / 雪球等 13 个平台的定向抓取 | 消费者视角/UGC 口碑/招聘信号只有这些平台有，通用搜索引擎抓不到。**评测视频（B站）+ 使用体验（小红书）+ 招聘变动（LinkedIn）** 是竞品情报三金刚 |
+| **marketing/competitor-profiling** | 内置了竞对档案的 12 个必查字段（定位 / 团队 / 融资 / GTM / 定价 / 产品线 / 客户 / 合作 / 官方渠道 / 招聘 / 舆情 / 迭代节奏） | 让 LLM 自由做"竞品分析"会漏项。这个 skill 强制走清单，输出稳定 |
+| **marketing/customer-research** | 内置了 JTBD 访谈脚本 + 用户画像模板 | 命中"用户为什么用 XX"类问题时挂载，比 LLM 自由发散更成体系 |
+| **marketing/directory-submissions** | Product Hunt / G2 / Capterra / AlternativeTo 的情报接口 | 海外竞品调研必调，这些平台是海外 SaaS/工具类产品最集中的评价与发现地 |
+| **enterprise-search + ku-doc-manage** | 百度内网研究报告 + 如流知识库 | 如果既往调研已经做过，先查内网再联网可省一半时间；且内网数据 `confidence=high` |
 
 **产出：** 统一的 YAML 源清单，每条含 `source_id / title / publisher / publish_date / url / confidence / key_facts / full_text_fetched`
 
-**source_id 前缀：** FC (Firecrawl) / RS (realtime-search) / BD (baidu) / RSS / SOC (社交/热榜) / MKT (marketing skill) / ES (内网) / KU (知识库)
+**source_id 前缀（用于报告引文追溯）：** FC (Firecrawl) / RS (realtime-search) / BD (baidu) / RSS / SOC (社交/热榜) / MKT (marketing skill) / ES (内网) / KU (知识库)
 
 **⛳ 闸门：数字冲突或缺关键源时暂停请你选口径。**
 
@@ -142,9 +188,32 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 
 ## t3 — 结构化分析（按框架维度）
 
-**你来做：**
-- 等待分析产出（无需操作）
-- Codex 提示"证据不足"时决定是否补检索
+**这一阶段在做什么：** 把 t2 拿到的一堆资料，按 t1 选定的框架维度重新组织，每条结论必须挂 source_id，并区分事实/计算/假设/判断。
+
+**为什么必须做这一步：** t2 结束时你手里是"51 篇原始资料"，直接扔给 LLM 让它写报告，产出会变成"堆资料"——把资料原文换了个说法罗列一遍，没有观点、没有比较、没有洞察。t3 存在的意义是**强制按框架的子维度提炼**，让 LLM 从"总结员"变成"分析师"。
+
+**为什么区分事实/计算/假设/判断：** 这是给报告读者的可信度信号。同样是"高德 MAU 4.5 亿"这句话——
+- 官方财报 → 事实（可直接引用）
+- 财报数字 × 增长率 → 计算（可复算）
+- 参考市场规模反推 → 假设（可能错，需注明）
+- "领先百度地图 20%" → 判断（主观，需支撑）
+
+不区分这四类的报告读起来"看起来都很确定"，但里面 30% 是 LLM 拍脑袋，这是最危险的。
+
+**调用的 Skill 及作用：**
+
+| Skill | 它做什么 | 为什么这一步要用它 |
+|---|---|---|
+| **marketing/customer-research** | 强制 JTBD 陈述遵循"当[情境]时，我想[动机]，以便[结果]"句式 + 用户画像 6 字段模板 | LLM 自由写用户需求会写成"用户想要更方便"这种废话，走 skill 输出的每条 JTBD 都是可执行洞察 |
+| **marketing/competitor-profiling** | 竞对档案 12 字段清单（见 t2 说明） | 让 t3 竞品对比表的每一列都有确定字段，不会漏 |
+| **marketing/analytics + ab-testing** | Customer Journey 五阶段模板 + AARRR 漏斗计算 | 用户路径类分析需要转化率、留存率等标准指标，skill 有内置公式 |
+| **marketing/product-marketing** | 4P 中 Product 维度的分析清单（USP / positioning / feature-benefit） | 竞品功能定位分析强制走清单，避免遗漏关键差异化点 |
+| **marketing/pricing** | 4P 中 Price 维度（定价模型 / 会员体系 / 折扣策略 / anchor） | 竞品商业化分析必用，尤其地图厂商的会员/商户/API 收费三条线 |
+| **marketing/social + public-relations** | CBBE 品牌传播层 + 媒体口径识别 | 品牌力分析用 |
+| **marketing/seo-audit + programmatic-seo** | AARRR/Acquisition 层的搜索获客检查 | 竞品增长打法分析用 |
+| **finance-skills/*** | 遇到估值/财报/护城河题时挂载（本项目不主用） | 混合题兜底，一般不触发 |
+
+**产出：** 按框架的结构化中间稿（每维度一节，每条结论带 source_id 与置信度）
 
 **Codex 来做：**
 - 按选定框架的子维度组织内容，例：
@@ -157,6 +226,10 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 - 每条结论标 `source_id + URL`
 - 区分**事实 / 计算 / 假设 / 判断**
 - 关键数字 ≥2 源交叉验证
+
+**你来做：**
+- 等待分析产出（无需操作）
+- Codex 提示"证据不足"时决定是否补检索
 
 **调用的 Skill（产品/竞品场景常用）：**
 - **marketing/customer-research** — JTBD 陈述、用户画像
@@ -171,6 +244,12 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 
 ## t4 — 金字塔调研报告生成
 
+**这一阶段在做什么：** 把 t3 的结构化分析转成读者能 5 分钟读懂的报告——结论先行、每段 ≤150 字、关键数据加粗、附三栏对比表和参考文献表。
+
+**为什么必须做这一步：** t3 的产出是"分析中间态"，按框架维度组织，但对报告读者不友好（他们不关心 PEST 四维，他们想 30 秒知道结论）。t4 存在的意义是**把分析结论金字塔化**——最上面是一句话结论，往下拆成 3 条支撑理由，再往下是各维度详细分析。读者可以随时停在任一层级。
+
+**为什么强制附参考文献表：** 报告结论如果只写"根据某研究"没有链接，读者无法验证；如果每条都嵌大段引用又难读。金字塔尾部的参考文献表 + 正文内联 source_id 是妥协方案——正文轻，读者想验证时能一键跳原文。
+
 **你来做：**
 - 等待报告生成
 
@@ -181,9 +260,13 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 - 末尾附**风险与不确定性表格**（触发条件 / 影响 / 概率 / 来源）
 - 末尾附**参考文献表**：编号 / 标题 / 发布方 / 日期 / 置信度 / 可跳转链接
 
-**调用的 Skill：**
-- **finance-skills/generative-ui** — 竞品矩阵/功能雷达图转 HTML/SVG（Web 交付时）
-- **humanizer-zh** — 去 AI 味终检
+**调用的 Skill 及作用：**
+
+| Skill | 它做什么 | 为什么这一步要用它 |
+|---|---|---|
+| **search-agent 内核**（`lib/report_generator.py`）| 按框架模板生成金字塔结构 + 自动插入 source_id + 生成参考文献表 | 报告结构和引文格式必须完全一致，走内核模板比让 LLM 每次自由发挥更稳定 |
+| **finance-skills/generative-ui** | 把竞品对比表、功能矩阵、雷达图转成交互式 HTML/SVG widget | Web 交付时用（例：需要在飞书文档或内部站点嵌入可点击的对比图），比静态截图直观 10 倍 |
+| **humanizer-zh** | 检测并修复 AI 写作特征（破折号过度、三段式、"值得注意的是"等 AI 味词） | 报告如果一眼看出是 AI 写的，读者会先入为主打折扣；这个 skill 是发布前的最后一道净化 |
 
 **产出：** `output/[主题]_report_YYYYMMDD.md`
 
@@ -192,6 +275,16 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 ---
 
 ## t5 — 你终审 & 修订
+
+**这一阶段在做什么：** 你把报告过一遍，提出具体修订意见（不是"改得更好"这种模糊指令，而是"位置 X 的结论过强 / 表格缺一列 / 这个 source 不可信"），Codex 只按修订清单执行。
+
+**为什么必须有这一步：** LLM 存在两类无法自查的问题——
+1. **幻觉**：编造出没出现在源里的数字或"某某报告显示"，越自信越可疑
+2. **视角错位**：LLM 从中立视角写"高德 vs 百度地图"，但你想要的是"百度地图团队视角的启示"
+
+第 1 类问题需要人工对着参考文献表逐条抽查；第 2 类问题只有你能判断"对我们团队有没有用"。这一步不是走过场，是最后的质量闸门。
+
+**为什么限制 3 轮：** 修订循环没有上限就会陷入"每轮都改一点点"的低效循环。3 轮足够处理绝大多数正当修订；超过 3 轮说明 t1 或 t2 有本质问题（比如框架选错了或者源太少），应该往回退而不是继续改。
 
 **你来做：**
 - 查看报告 + 引文表
@@ -206,24 +299,38 @@ git clone git@github.com:wwshuyu29-wq/search-agent.git ~/.codex/skills/search-ag
 - 只按修订计划执行，不擅自改动其他部分
 - 需要补数据时回到 t2 补检索
 
+**调用的 Skill 及作用：**
+
+| Skill | 它做什么 | 为什么这一步要用它 |
+|---|---|---|
+| **verification-before-completion** | 声称"改完了"之前强制跑一次核查：所有 must_fix 是否都改了、是否引入新的无源事实、Key Message 是否仍一致 | LLM 有"过度乐观地宣布完成"的倾向，这个 skill 是防止假交付 |
+| **copy-editing** | 结构化编辑审查（Key Message 一致性、事实可追溯性、调性合规） | 修订过程中容易改坏其他段落，让这个 skill 每轮修订后再过一遍 |
+| **humanizer-zh** | 去 AI 味 | 修订会引入新的 AI 味语言，每轮结束前重新净化 |
+
 **⛳ 闸门：修订计划里若需要"新事实"或存在冲突，Codex 暂停请你确认。**
 
 ---
 
 ## t6 — 后续行动衔接（可选）
 
-调研完成后，Codex 可直接衔接下游动作：
+**这一阶段在做什么：** 调研做完不能只停在报告——报告的价值 = 后续动作的价值。t6 是把报告变成"立项 brief / PR 稿 / 社交传播 / KOL 脚本 / 用户访谈提纲 / 竞品监控周报"等可执行产物的桥梁。
 
-| 你说 | Codex 调 | 场景 |
-|---|---|---|
-| "写个新功能立项 brief" | brainstorming + writing-plans | 立项文档 |
-| "起一个 PR 稿" | marketing/launch + copywriting + public-relations | 新功能发布 |
-| "帮我起社交传播文案" | marketing/social + copywriting | 微博/小红书 |
-| "做落地页文案" | marketing/copywriting + cro | 落地页 |
-| "写 KOL 投放脚本" | marketing/social + ad-creative | 抖音/B站 |
-| "做用户访谈提纲" | marketing/customer-research | 用户研究 |
-| "起竞品监控周报模板" | content-strategy + writing-plans | 长期监控 |
-| "输出对外分享稿" | copywriting + copy-editing + humanizer-zh | 内部分享 |
+**为什么单独作为一个阶段：** 大部分调研做完就烂在文件夹里，因为"从调研结论 → 可执行产物"这一步需要**换一批 skill**（copywriting / launch / cro / emails 等），不再是搜索和分析类工具。把它独立出来是提醒你：报告不是终点。
+
+**为什么衔接的 skill 都是 marketing/*：** 因为我们是产品/竞品调研场景，下游动作大概率是"根据调研写文案 / 起立项 / 定 GTM"，这些都是营销与增长范畴。skill 之间的衔接不是随机组合，是走"调研→立项→执行"的产品经典流水线。
+
+调研完成后，Codex 可直接衔接下游动作。**每个后续 skill 都是一个"专家动作打包"**——你不需要自己拼组件：
+
+| 你说 | Codex 调 | 场景 | 这个 skill 内置了什么 |
+|---|---|---|---|
+| "写个新功能立项 brief" | brainstorming + writing-plans | 立项文档 | 立项模板（目标 / 用户 / 竞品 / 关键指标 / 资源 / 时间线）|
+| "起一个 PR 稿" | marketing/launch + copywriting + public-relations | 新功能发布 | PR 三段结构（hook / 事实 / 引语）+ 记者语气模板 |
+| "帮我起社交传播文案" | marketing/social + copywriting | 微博/小红书 | 各平台字数上限、hashtag 规范、cover 图规格 |
+| "做落地页文案" | marketing/copywriting + cro | 落地页 | AIDA 结构 + 转化率优化 checklist |
+| "写 KOL 投放脚本" | marketing/social + ad-creative | 抖音/B站 | 短视频 hook 3 秒黄金法则 + 脚本节奏 |
+| "做用户访谈提纲" | marketing/customer-research | 用户研究 | JTBD 5 问 + 追问模板 |
+| "起竞品监控周报模板" | content-strategy + writing-plans | 长期监控 | 每周 checklist + 变更对比表 |
+| "输出对外分享稿" | copywriting + copy-editing + humanizer-zh | 内部分享 | 润色 + 去 AI 味 |
 
 ---
 
