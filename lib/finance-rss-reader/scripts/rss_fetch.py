@@ -149,20 +149,33 @@ def relevance_score(item, keywords):
     关键词匹配打分 0-1
 
     改进:
-    - 支持部分匹配
-    - 标题权重更高
+    - 中文多关键词查询不再被关键词数量过度稀释
+    - 标题命中任何核心词即可保留为候选
     """
     title = item.get('title', '').lower()
     summary = item.get('summary', '').lower()
+    normalized_keywords = [kw.lower() for kw in keywords if kw.strip()]
 
-    title_hits = sum(1 for kw in keywords if kw.lower() in title)
-    summary_hits = sum(1 for kw in keywords if kw.lower() in summary)
+    if not normalized_keywords:
+        return 0.0
 
-    # 标题匹配权重 2x
-    total_hits = title_hits * 2 + summary_hits
-    max_possible = len(keywords) * 3  # 假设标题和摘要都匹配
+    title_hits = [kw for kw in normalized_keywords if kw in title]
+    summary_hits = [kw for kw in normalized_keywords if kw in summary]
+    unique_hits = set(title_hits + summary_hits)
 
-    return min(total_hits / max(max_possible, 1), 1.0)
+    if not unique_hits:
+        return 0.0
+
+    score = 0.0
+    if title_hits:
+        score += 0.42
+        score += min(len(title_hits) - 1, 3) * 0.12
+    if summary_hits:
+        score += 0.18
+        score += min(len(summary_hits) - 1, 3) * 0.06
+
+    score += min(len(unique_hits) / len(normalized_keywords), 1.0) * 0.16
+    return min(score, 1.0)
 
 def is_within_days(pub_str, days):
     """

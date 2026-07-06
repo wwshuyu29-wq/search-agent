@@ -421,5 +421,149 @@
     "fetcher": "firecrawl",
     "query_template": "site:nbd.com.cn 原创 {keywords}",
     "note": "每日经济新闻重磅原创（公共 RSSHub 503，改走 Firecrawl）"
+  },
+  {
+    "name": "21世纪经济报道",
+    "url": "https://www.21jingji.com/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:21jingji.com {keywords}",
+    "note": "21 世纪经济报道，覆盖产业、公司、金融与区域经济"
+  },
+  {
+    "name": "证券时报",
+    "url": "https://www.stcn.com/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:stcn.com {keywords}",
+    "note": "证券时报，A 股、上市公司、产业政策与资本市场"
+  },
+  {
+    "name": "中国证券报",
+    "url": "https://www.cs.com.cn/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:cs.com.cn {keywords}",
+    "note": "中国证券报，资本市场与上市公司报道"
+  },
+  {
+    "name": "上海证券报",
+    "url": "https://www.cnstock.com/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:cnstock.com {keywords}",
+    "note": "上海证券报，资本市场、产业与政策信息"
+  },
+  {
+    "name": "经济参考报",
+    "url": "https://www.jjckb.cn/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:jjckb.cn {keywords}",
+    "note": "经济参考报，宏观经济、政策与产业观察"
+  },
+  {
+    "name": "中国经营报",
+    "url": "https://www.cb.com.cn/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:cb.com.cn {keywords}",
+    "note": "中国经营报，公司、商业模式与产业深度"
+  },
+  {
+    "name": "蓝鲸财经",
+    "url": "https://www.lanjinger.com/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:lanjinger.com {keywords}",
+    "note": "蓝鲸财经，金融、消费、科技与公司报道"
+  },
+  {
+    "name": "澎湃新闻·财经",
+    "url": "https://www.thepaper.cn/finance",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:thepaper.cn {keywords} 财经",
+    "note": "澎湃财经，宏观、公司与产业新闻"
+  },
+  {
+    "name": "新京报贝壳财经",
+    "url": "https://www.bjnews.com.cn/finance",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:bjnews.com.cn {keywords} 贝壳财经",
+    "note": "贝壳财经，消费、科技、公司和资本市场"
+  },
+  {
+    "name": "时代财经",
+    "url": "https://www.time-weekly.com/",
+    "region": "zh",
+    "type": "财经媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:time-weekly.com {keywords}",
+    "note": "时代财经，产业、公司与消费报道"
+  },
+  {
+    "name": "DoNews",
+    "url": "https://www.donews.com/",
+    "region": "zh",
+    "type": "科技财经",
+    "fetcher": "firecrawl",
+    "query_template": "site:donews.com {keywords}",
+    "note": "DoNews，互联网、科技公司与产品动态"
+  },
+  {
+    "name": "品玩",
+    "url": "https://www.pingwest.com/",
+    "region": "zh",
+    "type": "科技财经",
+    "fetcher": "firecrawl",
+    "query_template": "site:pingwest.com {keywords}",
+    "note": "品玩，科技商业、AI 产品与互联网公司"
+  },
+  {
+    "name": "极客公园",
+    "url": "https://www.geekpark.net/",
+    "region": "zh",
+    "type": "科技财经",
+    "fetcher": "firecrawl",
+    "query_template": "site:geekpark.net {keywords}",
+    "note": "极客公园，科技产品、AI 应用与创业公司"
+  },
+  {
+    "name": "量子位",
+    "url": "https://www.qbitai.com/",
+    "region": "zh",
+    "type": "AI媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:qbitai.com {keywords}",
+    "note": "量子位，AI 技术、AI 产品与大模型应用"
+  },
+  {
+    "name": "机器之心",
+    "url": "https://www.jiqizhixin.com/",
+    "region": "zh",
+    "type": "AI媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:jiqizhixin.com {keywords}",
+    "note": "机器之心，AI 研究、产业与模型应用"
+  },
+  {
+    "name": "AIbase",
+    "url": "https://www.aibase.com/",
+    "region": "zh",
+    "type": "AI媒体",
+    "fetcher": "firecrawl",
+    "query_template": "site:aibase.com {keywords}",
+    "note": "AIbase，AI 产品、AI 工具和行业快讯"
   }
 ]

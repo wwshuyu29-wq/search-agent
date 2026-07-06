@@ -23,7 +23,7 @@ graph TD
     Step1 --> L2[Layer 2 业绩会 Transcript<br/>realtime-search Brave]
     Step1 --> L3[Layer 3 深度分析<br/>Firecrawl 英文]
     Step1 --> L4[Layer 4 中文财经媒体<br/>realtime-search 百度]
-    Step1 --> L5[Layer 5 RSS 聚合<br/>finance-rss-reader 35 源]
+    Step1 --> L5[Layer 5 RSS 聚合<br/>finance-rss-reader 65+ 源]
 
     L1 --> Fetch[URL 全文抓取<br/>realtime-search fetch]
     L2 --> Fetch
@@ -67,7 +67,7 @@ graph TD
 ## 与 CLAUDE.md 的差异（v3.0 融合后）
 
 - **保留 CLAUDE.md 精华**：审核卡片格式、YAML 源清单、金字塔报告、强制引文、质量红线（禁模糊词、数字必带口径）
-- **保留 v2.3 优势**：9 框架 + 7 组合规则、5 层分层搜索、35 个财经 RSS 源
+- **保留 v2.3 优势并扩展**：9 框架 + 7 组合规则、5 层分层搜索、65+ 个财经/产业/AI 媒体源
 - **新增 Firecrawl 层**：填补英文深度内容（Seeking Alpha / FT / SEC）短板
 - **两条路径**：Codex 原生走 prompt（SKILL.md），脚本党走 `bin/search_agent.py` CLI
 

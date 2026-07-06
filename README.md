@@ -140,7 +140,7 @@ search-agent-skill3.0/
 │   ├── framework_combinator.py     # 框架组合推荐
 │   ├── search_engine.py            # 多层搜索调度
 │   ├── report_generator.py         # 报告生成
-│   └── finance-rss-reader/         # 内嵌 35 财经 RSS 源
+│   └── finance-rss-reader/         # 内嵌 65+ 财经/产业/AI 媒体源
 ├── bin/
 │   └── search_agent.py             # Python CLI 编排入口
 └── config/

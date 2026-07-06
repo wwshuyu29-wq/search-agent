@@ -44,6 +44,40 @@ def _command_check(name, command, required=False):
     return _check(name, status, f"{command} not found in PATH", required)
 
 
+def _python_runtime_check(required=True):
+    version = sys.version_info
+    detail = f"{sys.executable} ({version.major}.{version.minor}.{version.micro})"
+    if version >= (3, 11):
+        return _check("Python runtime", "ok", detail, required)
+    return _check(
+        "Python runtime",
+        "warn",
+        f"{detail}; recommended Python 3.11+ for network tooling stability",
+        required,
+    )
+
+
+def _python311_command_check(required=False):
+    candidates = ["python3.11", str(Path.home() / ".local" / "bin" / "python3.11")]
+    for candidate in candidates:
+        path = shutil.which(candidate) if os.path.basename(candidate) == candidate else candidate
+        if not path or not Path(path).exists():
+            continue
+        try:
+            proc = subprocess.run(
+                [path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            continue
+        if proc.returncode == 0:
+            return _check("Python 3.11 command", "ok", f"{path} {proc.stdout.strip() or proc.stderr.strip()}", required)
+    status = "error" if required else "warn"
+    return _check("Python 3.11 command", status, "python3.11 not found; install Python 3.11+ or use bundled runtime", required)
+
+
 def _run_help_check(name, command, required=False):
     try:
         proc = subprocess.run(command, capture_output=True, text=True, timeout=15)
@@ -130,6 +164,8 @@ def _load_rss_fetch_module():
 def collect_checks(run_live=False):
     """Collect local workflow readiness checks."""
     checks = [
+        _python_runtime_check(required=False),
+        _python311_command_check(required=False),
         _file_check("search-agent skill", REPO_ROOT / "SKILL.md"),
         _file_check("USAGE guide", REPO_ROOT / "USAGE.md"),
         _file_check("Firecrawl script", REPO_ROOT / "scripts" / "firecrawl_search.py"),

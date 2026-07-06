@@ -1,5 +1,14 @@
 # Search Agent 智能分析系统 - 更新日志
 
+## Unreleased
+
+### ✨ RSS 与运行环境增强
+
+- RSS/媒体源从 51 个扩展到 67 个，新增 21 世纪经济报道、证券时报、中国证券报、上海证券报、经济参考报、中国经营报、蓝鲸财经、澎湃新闻·财经、新京报贝壳财经、时代财经、DoNews、品玩、极客公园、量子位、机器之心、AIbase 等财经/产业/AI 媒体。
+- 工作流内置 RSS 搜索取消 `--max-sources 15` 限制，生产调研默认扫描全部配置源；`--max-sources N` 仅作为调试/演示时的手动限流参数。
+- 新增 `scripts/bootstrap_python311.sh`，统一为团队创建 Python 3.11+ 项目虚拟环境。
+- `search_agent_doctor.py` 新增 Python runtime / Python 3.11 command 检查，避免同事误用 macOS 系统 Python 3.9。
+
 ## v2.3 (2026-07-01)
 
 ### ✨ 新增功能

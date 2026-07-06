@@ -41,7 +41,7 @@ python3 ~/.comate/skills/news-aggregator-skill/scripts/fetch_news.py \
     --deep
 ```
 
-2. **通过 finance-rss-reader 融合**（推荐，与其他 51 个源统一 YAML 输出）：
+2. **通过 finance-rss-reader 融合**（推荐，与其他 67 个源统一 YAML 输出）：
    `rss_sources.json` 里将部分源标为 `fetcher: newsagg`，`rss_fetch.py` 会自动 subprocess 调用 news-aggregator 拿数据并归一化。当前已迁移：**华尔街见闻·全球 / 36 氪·深度**（从 firecrawl 降级为直连 API）。
 
 **为什么用它替代部分 Firecrawl 源**：
@@ -142,8 +142,7 @@ python3 lib/finance-rss-reader/scripts/rss_fetch.py \
     --ticker "<TICKER>" \
     --days 14 \
     --sources-config lib/finance-rss-reader/references/rss_sources.json \
-    --min-score 0.4 \
-    --max-sources 15
+    --min-score 0.4
 ```
 
 抓取规则：
@@ -152,7 +151,7 @@ python3 lib/finance-rss-reader/scripts/rss_fetch.py \
 - 全文抓取走 `skill realtime-search fetch <URL> --max-chars 8000`
 - 输出直接以 `S_RSS###` 追加到 Step 1 的 YAML 源清单
 
-当前 51 个源，其中 32 个中文源、16 个深度长文源；配置详见 `lib/finance-rss-reader/references/rss_sources.json`。
+当前 65+ 个源，其中中文财经、英文财经、AI/科技商业、深度长文源混合覆盖；配置详见 `lib/finance-rss-reader/references/rss_sources.json`。生产调研默认全量扫描，只有调试或演示时才临时加 `--max-sources N`。
 
 ## 7. 场景 → 平台组合速查
 

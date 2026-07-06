@@ -43,8 +43,9 @@ log "目标目录：$TARGET_DIR"
 echo
 
 command -v git    >/dev/null 2>&1 || warn "git 未安装（如果需要在线更新会用到；离线安装不需要）"
-command -v python3 >/dev/null 2>&1 || { error "缺少 python3，请先安装"; exit 1; }
-command -v pip3   >/dev/null 2>&1 || { warn  "缺少 pip3，Python 依赖需手动安装"; }
+if ! command -v python3.11 >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/python3.11" ]; then
+    warn "未发现 python3.11；后续 bootstrap 会尝试使用符合 3.11+ 的 python3，否则会提示安装"
+fi
 
 ok "环境检查通过"
 echo
@@ -129,16 +130,14 @@ VENDOR_FINANCE="$CURRENT_DIR/vendor/finance"
 install_from_vendor_or_git "finance" "$VENDOR_FINANCE" "$FINANCE_REPO" "$FINANCE_DEST"
 echo
 
-# ---------- Step 5: 安装 Python 依赖 ----------
-log "Step 5/6: 检查 Python 依赖"
-if python3 -c "import requests" >/dev/null 2>&1; then
-    ok "requests 已安装（Firecrawl 脚本可用）"
-elif command -v pip3 >/dev/null 2>&1; then
-    log "尝试安装 requests..."
-    pip3 install -q --user requests 2>&1 | tail -3 && ok "requests 已安装" \
-        || warn "pip 安装失败。如果无网络：Firecrawl 层将不可用，其他层不受影响"
+# ---------- Step 5: 安装 Python 3.11 项目环境 ----------
+log "Step 5/6: 创建 Python 3.11 项目虚拟环境"
+if [ -x "$SEARCH_AGENT_DEST/scripts/bootstrap_python311.sh" ]; then
+    (cd "$SEARCH_AGENT_DEST" && scripts/bootstrap_python311.sh) \
+        && ok "Python 3.11 项目环境已就绪" \
+        || warn "Python 3.11 环境创建失败；请按 USAGE.md 手动处理"
 else
-    warn "requests 未安装且无 pip3。Firecrawl 层将不可用；如需启用，手动安装 requests"
+    warn "缺少 scripts/bootstrap_python311.sh；请手动创建 Python 3.11 venv"
 fi
 echo
 
@@ -192,7 +191,11 @@ check "finance-skills"             "$FINANCE_DEST/plugins"
 
 echo
 # 验证 Firecrawl 脚本能运行
-if python3 "$SEARCH_AGENT_DEST/scripts/firecrawl_search.py" --help >/dev/null 2>&1; then
+PYTHON_BIN="$SEARCH_AGENT_DEST/.venv/bin/python"
+if [ ! -x "$PYTHON_BIN" ]; then
+    PYTHON_BIN="python3"
+fi
+if "$PYTHON_BIN" "$SEARCH_AGENT_DEST/scripts/firecrawl_search.py" --help >/dev/null 2>&1; then
     ok "firecrawl_search.py --help 通过"
 else
     error "firecrawl_search.py 无法运行"
@@ -210,7 +213,9 @@ echo "  - finance/*     (20+ 个金融专家 skill)"
 echo
 echo "下一步："
 echo "  1. source $SHELL_RC  # 加载 FIRECRAWL_API_KEY"
-echo "  2. 在 Codex 里唤起 search-agent skill 试试："
+echo "  2. source $SEARCH_AGENT_DEST/.venv/bin/activate"
+echo "  3. python scripts/search_agent_doctor.py --live"
+echo "  4. 在 Codex 里唤起 search-agent skill 试试："
 echo "     '帮我调研拼多多 2026 年的下沉市场竞争格局'"
 echo
 echo "文档索引："

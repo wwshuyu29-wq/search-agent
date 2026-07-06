@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v1/search"
 
@@ -39,7 +40,15 @@ def _require_requests():
         sys.exit(2)
 
 
-def firecrawl_search(query: str, limit: int, lang: str, api_key: str, timeout: int = 60):
+def firecrawl_search(
+    query: str,
+    limit: int,
+    lang: str,
+    api_key: str,
+    timeout: int = 60,
+    retries: int = 2,
+    backoff_seconds: float = 1.5,
+):
     """调用 Firecrawl Search API，返回标准化的结果列表。"""
     requests = _require_requests()
     payload = {
@@ -52,7 +61,22 @@ def firecrawl_search(query: str, limit: int, lang: str, api_key: str, timeout: i
         "Content-Type": "application/json",
     }
 
-    resp = requests.post(FIRECRAWL_ENDPOINT, json=payload, headers=headers, timeout=timeout)
+    resp = None
+    last_error = None
+    request_timeout = (10, timeout)
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(FIRECRAWL_ENDPOINT, json=payload, headers=headers, timeout=request_timeout)
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt >= retries:
+                raise
+            time.sleep(backoff_seconds * (attempt + 1))
+
+    if resp is None:
+        raise last_error
+
     resp.raise_for_status()
     data = resp.json()
 
@@ -80,6 +104,7 @@ def main():
     parser.add_argument("--limit", type=int, default=5, help="返回结果数量 (默认 5)")
     parser.add_argument("--lang", default="en", help="语言 (默认 en，可选 zh)")
     parser.add_argument("--timeout", type=int, default=60, help="HTTP 超时秒数")
+    parser.add_argument("--retries", type=int, default=2, help="瞬时网络失败重试次数 (默认 2)")
     args = parser.parse_args()
 
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
@@ -98,6 +123,7 @@ def main():
             lang=args.lang,
             api_key=api_key,
             timeout=args.timeout,
+            retries=args.retries,
         )
     except Exception as e:
         # requests.HTTPError / RequestException 都归一处理，避免顶层再 import

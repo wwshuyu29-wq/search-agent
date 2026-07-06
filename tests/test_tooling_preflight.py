@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -29,6 +30,19 @@ class ToolingPreflightTest(unittest.TestCase):
             Path(rss_fetch.FIRECRAWL_SCRIPT),
             REPO_ROOT / "scripts" / "firecrawl_search.py",
         )
+
+    def test_rss_relevance_keeps_single_strong_chinese_title_hit(self):
+        rss_fetch = load_module(
+            "rss_fetch_relevance_for_test",
+            REPO_ROOT / "lib" / "finance-rss-reader" / "scripts" / "rss_fetch.py",
+        )
+
+        score = rss_fetch.relevance_score(
+            {"title": "豆包上线轻导航，一键打车继续灰测", "summary": ""},
+            ["豆包导航", "豆包", "AI导航", "一键打车"],
+        )
+
+        self.assertGreaterEqual(score, 0.4)
 
     def test_doctor_reports_core_tooling_without_network(self):
         doctor = load_module(
@@ -81,6 +95,30 @@ class ToolingPreflightTest(unittest.TestCase):
 
         self.assertEqual(check["status"], "warn")
         self.assertIn("extension not connected", check["detail"])
+
+    def test_rss_source_config_has_expanded_financial_media_coverage(self):
+        sources_path = REPO_ROOT / "lib" / "finance-rss-reader" / "references" / "rss_sources.json"
+        sources = json.loads(sources_path.read_text(encoding="utf-8"))
+        names = {source["name"] for source in sources}
+
+        self.assertGreaterEqual(len(sources), 65)
+        self.assertIn("21世纪经济报道", names)
+        self.assertIn("证券时报", names)
+        self.assertIn("中国经营报", names)
+        self.assertIn("蓝鲸财经", names)
+        self.assertIn("澎湃新闻·财经", names)
+
+    def test_doctor_reports_python_runtime_readiness(self):
+        doctor = load_module(
+            "search_agent_doctor_python_for_test",
+            REPO_ROOT / "scripts" / "search_agent_doctor.py",
+        )
+
+        checks = doctor.collect_checks(run_live=False)
+        by_name = {check["name"]: check for check in checks}
+
+        self.assertIn("Python runtime", by_name)
+        self.assertIn("Python 3.11 command", by_name)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import json
 import subprocess
 import os
 import re
+import sys
 from typing import List, Dict, Tuple
 from collections import defaultdict
 from datetime import datetime
@@ -265,13 +266,12 @@ class SearchEngine:
         try:
             # 调用 RSS 拉取脚本
             cmd = [
-                "python3", rss_script,
+                sys.executable, rss_script,
                 "--keywords", ",".join(keywords),
                 "--ticker", ticker if ticker else "",
                 "--days", "14",
                 "--sources-config", rss_config,
                 "--min-score", "0.4",
-                "--max-sources", "15"  # 限制源数量，避免超时
             ]
 
             print(f"[Layer RSS] 执行: {' '.join(cmd)}")
