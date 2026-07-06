@@ -20,7 +20,7 @@ set -euo pipefail
 # ---------- 配置 ----------
 TARGET_DIR="${TARGET_DIR:-$HOME/.codex/skills}"
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FIRECRAWL_KEY_DEFAULT="fc-a5279d633c4f4636b2592bc31a431770"
+FIRECRAWL_KEY_DEFAULT="${FIRECRAWL_API_KEY:-}"
 
 MARKETING_REPO="https://github.com/coreyhaines31/marketingskills.git"
 FINANCE_REPO="https://github.com/himself65/finance-skills.git"

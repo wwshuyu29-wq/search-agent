@@ -248,7 +248,7 @@ class SearchAgentSkill:
             )
 
         # Step 7: 输出报告
-        output_dir = "/home/gem/workspace/.ark/output/search-agent-skill_2026-07-01"
+        output_dir = self._get_output_dir()
         os.makedirs(output_dir, exist_ok=True)
 
         if is_combination:
@@ -345,9 +345,24 @@ class SearchAgentSkill:
         params = {}
 
         # 简化实现: 使用关键词匹配
-        if "高德" in user_query:
+        map_products = ["高德地图", "百度地图", "腾讯地图", "Apple Maps", "Google Maps", "Waze"]
+        mentioned_map_products = [product for product in map_products if product in user_query]
+
+        if mentioned_map_products:
+            primary = mentioned_map_products[0]
+            params["主题"] = primary
+            params["公司名"] = primary
+            params["公司A"] = primary
+            params["行业"] = "地图导航"
+            competitors = [product for product in mentioned_map_products[1:] if product != primary]
+            if competitors:
+                params["竞争对手"] = competitors
+                params["公司B"] = competitors[0]
+        elif "高德" in user_query:
             params["主题"] = "高德地图"
             params["公司名"] = "高德地图"
+            params["公司A"] = "高德地图"
+            params["行业"] = "地图导航"
         elif "百度" in user_query:
             params["主题"] = "百度"
             params["公司名"] = "百度"
@@ -355,7 +370,9 @@ class SearchAgentSkill:
             params["主题"] = "未知主题"
 
         # 提取时间
-        if "2026" in user_query:
+        if "最近三个月" in user_query:
+            params["期间"] = "最近三个月"
+        elif "2026" in user_query:
             if "Q1" in user_query:
                 params["期间"] = "2026Q1"
             elif "Q2" in user_query:
@@ -364,6 +381,31 @@ class SearchAgentSkill:
                 params["期间"] = "2026"
 
         return params
+
+    def _get_output_dir(self) -> str:
+        """获取报告输出目录，优先使用环境变量，其次读取配置文件。"""
+        env_output_dir = os.getenv("SEARCH_AGENT_OUTPUT_DIR")
+        if env_output_dir:
+            return env_output_dir
+
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        config_path = os.path.join(repo_root, "config", "settings.json")
+        default_output_dir = os.path.join(repo_root, "output")
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+            configured_output_dir = settings.get("report", {}).get("output_dir")
+        except (OSError, json.JSONDecodeError):
+            configured_output_dir = None
+
+        if not configured_output_dir:
+            return default_output_dir
+
+        if os.path.isabs(configured_output_dir):
+            return configured_output_dir
+
+        return os.path.abspath(os.path.join(repo_root, configured_output_dir))
 
     def _detect_content_type(self, url: str) -> str:
         """检测URL对应的内容类型"""

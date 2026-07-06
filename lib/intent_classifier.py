@@ -95,10 +95,12 @@ class IntentClassifier:
         if self._contains_multiple_companies(user_query):
             scores["同行竞争对比"] = scores.get("同行竞争对比", 0) + 3
 
-        # 规则3: 如果提到"新功能"、"市场动态",优先PEST或竞争分析
+        # 规则3: 地图/产品新功能调研通常是竞品跟踪，优先竞争对比，再补宏观趋势
         if any(kw in query_lower for kw in ["新功能", "上新", "市场动态", "行业趋势"]):
-            scores["PEST分析"] = scores.get("PEST分析", 0) + 2
-            scores["同行竞争对比"] = scores.get("同行竞争对比", 0) + 2
+            scores["同行竞争对比"] = scores.get("同行竞争对比", 0) + 4
+            scores["PEST分析"] = scores.get("PEST分析", 0) + 1
+            reasons.setdefault("同行竞争对比", "问题涉及: 新功能/市场动态，需要做竞品跟踪")
+            reasons.setdefault("PEST分析", "问题涉及: 市场动态，可补充行业趋势")
 
         # 4. 如果没有匹配到任何框架,返回默认推荐
         if not scores:
@@ -172,10 +174,10 @@ class IntentClassifier:
 
 
 # 便捷函数
-def classify_intent(user_query: str, top_k: int = 3) -> List[Dict]:
+def classify_intent(user_query: str, top_k: int = 3, return_complexity: bool = True) -> List[Dict]:
     """便捷函数: 分析用户意图并推荐框架"""
     classifier = IntentClassifier()
-    return classifier.classify(user_query, top_k)
+    return classifier.classify(user_query, top_k, return_complexity=return_complexity)
 
 
 if __name__ == "__main__":

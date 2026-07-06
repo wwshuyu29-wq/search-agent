@@ -102,7 +102,7 @@ result = subprocess.run(
 sources = json.loads(result.stdout)
 ```
 
-环境变量要求：`FIRECRAWL_API_KEY=fc-a5279d633c4f4636b2592bc31a431770`
+环境变量要求：`FIRECRAWL_API_KEY=<your_firecrawl_api_key>`
 
 适用场景：Seeking Alpha 分析师报告、FT/Bloomberg、公司 IR 官网、SEC/EDGAR 文件
 
@@ -274,7 +274,7 @@ sources:
 
 ```bash
 # Firecrawl 深度搜索（必须配置）
-export FIRECRAWL_API_KEY="fc-a5279d633c4f4636b2592bc31a431770"
+export FIRECRAWL_API_KEY="<your_firecrawl_api_key>"
 ```
 
 Skills 依赖（已内置，无需额外配置）：

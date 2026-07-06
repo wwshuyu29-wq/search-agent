@@ -5,7 +5,8 @@
 """
 
 from datetime import datetime
-from typing import List, Dict
+from collections import Counter
+from typing import Any, List, Dict, Optional
 
 
 class ReportGenerator:
@@ -297,6 +298,17 @@ class ReportGenerator:
         Returns:
             str: Markdown格式的报告
         """
+        structured_analysis = kwargs.get("structured_analysis") or kwargs.get("analysis")
+        structured_sources = kwargs.get("sources")
+        if structured_analysis and structured_sources:
+            return self.generate_structured_report(
+                subject=subject,
+                framework_name=framework_name,
+                sources=structured_sources,
+                analysis=structured_analysis,
+                generated_at=kwargs.get("generated_at"),
+            )
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # 选择模板
@@ -344,6 +356,173 @@ class ReportGenerator:
             report = generic_template.format(**report_data)
 
         return report
+
+    def generate_structured_report(
+        self,
+        subject: str,
+        framework_name: str,
+        sources: List[Dict[str, Any]],
+        analysis: Dict[str, Any],
+        generated_at: Optional[str] = None,
+    ) -> str:
+        """Generate a source-backed Markdown report from T2/T3 structured data."""
+        timestamp = generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        source_map = self._build_source_map(sources)
+        lines = [
+            f"# {subject}",
+            "",
+            f"**生成时间**：{timestamp}",
+            f"**分析框架**：{framework_name}",
+            f"**信息源数量**：{len(sources)} 条",
+            "",
+            "---",
+            "",
+            "## 核心结论",
+            "",
+            f"> **总判断**：{analysis.get('core_judgment', '').strip() or '证据不足，暂不形成总判断。'}",
+            "",
+        ]
+
+        supporting_reasons = analysis.get("supporting_reasons") or []
+        if supporting_reasons:
+            lines.append("支撑理由：")
+            for idx, reason in enumerate(supporting_reasons, 1):
+                claim = reason.get("claim", "").strip()
+                confidence = reason.get("confidence", "medium")
+                cite = self._format_citations(reason.get("source_ids", []), source_map)
+                lines.append(f"{idx}. {claim}（置信度：{confidence}）{cite}")
+            lines.append("")
+
+        lines.extend(self._render_source_coverage(sources))
+
+        for section in analysis.get("sections", []):
+            heading = section.get("heading", "").strip()
+            if not heading:
+                continue
+            lines.extend(["", f"## {heading}", ""])
+            paragraphs = section.get("paragraphs") or []
+            for paragraph in paragraphs:
+                text = paragraph.get("text", "").strip()
+                if not text:
+                    continue
+                confidence = paragraph.get("confidence")
+                confidence_text = f"（置信度：{confidence}）" if confidence else ""
+                cite = self._format_citations(paragraph.get("source_ids", []), source_map)
+                lines.append(f"{text}{confidence_text}{cite}")
+                lines.append("")
+
+        competitor_matrix = analysis.get("competitor_matrix")
+        if competitor_matrix:
+            lines.extend(self._render_matrix("竞品对比表", competitor_matrix))
+
+        actions = analysis.get("actions") or []
+        if actions:
+            lines.extend(["", "## 可行动建议", ""])
+            lines.append("| 优先级 | 负责人 | 建议 | 来源 |")
+            lines.append("|---|---|---|---|")
+            for action in actions:
+                source_text = self._format_citations(action.get("source_ids", []), source_map, wrap=False)
+                lines.append(
+                    "| {priority} | {owner} | {text} | {sources} |".format(
+                        priority=action.get("priority", ""),
+                        owner=action.get("owner", ""),
+                        text=self._clean_table_cell(action.get("text", "")),
+                        sources=source_text,
+                    )
+                )
+
+        risks = analysis.get("risks") or []
+        if risks:
+            lines.extend(["", "## 风险与未验证事项", ""])
+            lines.append("| 风险事项 | 触发条件 | 影响程度 | 发生概率 | 来源 |")
+            lines.append("|---|---|---|---|---|")
+            for risk in risks:
+                source_text = self._format_citations(risk.get("source_ids", []), source_map, wrap=False)
+                lines.append(
+                    "| {item} | {trigger} | {impact} | {likelihood} | {sources} |".format(
+                        item=self._clean_table_cell(risk.get("item", "")),
+                        trigger=self._clean_table_cell(risk.get("trigger", "")),
+                        impact=risk.get("impact", ""),
+                        likelihood=risk.get("likelihood", ""),
+                        sources=source_text,
+                    )
+                )
+
+        lines.extend(self._render_references(sources))
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _build_source_map(self, sources: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        source_map = {}
+        for source in sources:
+            source_id = source.get("source_id") or source.get("id")
+            if source_id:
+                source_map[source_id] = source
+        return source_map
+
+    def _format_citations(
+        self,
+        source_ids: List[str],
+        source_map: Dict[str, Dict[str, Any]],
+        wrap: bool = True,
+    ) -> str:
+        if not source_ids:
+            return ""
+        rendered = []
+        for source_id in source_ids:
+            source = source_map.get(source_id, {})
+            url = source.get("url") or source.get("url_or_path") or ""
+            rendered.append(f"[{source_id}]({url})" if url else f"{source_id}（链接待补）")
+        joined = ", ".join(rendered)
+        return f"（来源：{joined}）" if wrap else joined
+
+    def _render_source_coverage(self, sources: List[Dict[str, Any]]) -> List[str]:
+        type_counts = Counter(source.get("source_type") or source.get("channel") or "未标注" for source in sources)
+        confidence_counts = Counter(source.get("confidence") or "未标注" for source in sources)
+        lines = ["## 信息源覆盖与可信度说明", ""]
+        lines.append("| 维度 | 覆盖情况 |")
+        lines.append("|---|---|")
+        lines.append(f"| 来源类型 | {self._format_counter(type_counts)} |")
+        lines.append(f"| 可信度 | {self._format_counter(confidence_counts)} |")
+        lines.append(f"| source_id 范围 | {', '.join(self._source_ids(sources)) or '无'} |")
+        lines.append("")
+        return lines
+
+    def _render_matrix(self, heading: str, matrix: Dict[str, Any]) -> List[str]:
+        columns = matrix.get("columns") or []
+        rows = matrix.get("rows") or []
+        if not columns:
+            return []
+        lines = ["", f"## {heading}", ""]
+        lines.append("| " + " | ".join(self._clean_table_cell(column) for column in columns) + " |")
+        lines.append("|" + "|".join("---" for _ in columns) + "|")
+        for row in rows:
+            padded = list(row) + [""] * max(0, len(columns) - len(row))
+            lines.append("| " + " | ".join(self._clean_table_cell(cell) for cell in padded[:len(columns)]) + " |")
+        return lines
+
+    def _render_references(self, sources: List[Dict[str, Any]]) -> List[str]:
+        lines = ["", "## 参考文献", ""]
+        lines.append("| 编号 | 标题 | 发布方 | 日期 | 置信度 | 原文链接 |")
+        lines.append("|---|---|---|---|---|---|")
+        for source in sorted(sources, key=lambda item: item.get("source_id") or item.get("id") or ""):
+            source_id = source.get("source_id") or source.get("id") or ""
+            title = self._clean_table_cell(source.get("title", "未命名来源"))
+            publisher = self._clean_table_cell(source.get("publisher", source.get("source", "")))
+            publish_date = source.get("publish_date") or source.get("date") or "未标注"
+            confidence = source.get("confidence") or "未标注"
+            url = source.get("url") or source.get("url_or_path") or ""
+            link = f"[查看原文]({url})" if url else "链接待补"
+            lines.append(f"| {source_id} | {title} | {publisher} | {publish_date} | {confidence} | {link} |")
+        return lines
+
+    def _source_ids(self, sources: List[Dict[str, Any]]) -> List[str]:
+        return [source_id for source_id in (source.get("source_id") or source.get("id") for source in sources) if source_id]
+
+    def _format_counter(self, counter: Counter) -> str:
+        return "；".join(f"{key} {value}" for key, value in counter.items()) if counter else "无"
+
+    def _clean_table_cell(self, value: Any) -> str:
+        return str(value).replace("|", "\\|").replace("\n", " ").strip()
 
     def _generate_dimension_sections(
         self,

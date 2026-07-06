@@ -17,7 +17,7 @@ import ssl
 
 # 允许通过环境变量覆盖 Firecrawl 脚本路径；默认相对本 skill 定位到项目根 scripts/
 _DEFAULT_FIRECRAWL = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
     'scripts', 'firecrawl_search.py'
 )
 FIRECRAWL_SCRIPT = os.environ.get('FIRECRAWL_SCRIPT', _DEFAULT_FIRECRAWL)
