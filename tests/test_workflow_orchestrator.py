@@ -113,6 +113,67 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertIn("source_count", final_report)
         self.assertGreaterEqual(final_report["source_count"], 3)
 
+    def test_gate_driven_workflow_stops_after_audit_card_until_user_confirms(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(
+            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
+        )
+
+        self.assertEqual(state["status"], "waiting_for_user")
+        self.assertEqual(state["pending_gate"], "audit_card_confirmed")
+        self.assertEqual(state["current_phase"], "step0_intent_and_audit")
+        self.assertIn("AuditCard", state["artifacts"])
+        self.assertNotIn("SearchPlan", state["artifacts"])
+        self.assertIn("回复确认", state["next_action"])
+
+    def test_gate_driven_workflow_resumes_after_confirmation_and_waits_for_final_review(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(
+            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
+        )
+
+        resumed = orchestrator.resume_gate_workflow(state, "确认")
+
+        self.assertEqual(resumed["status"], "waiting_for_user")
+        self.assertEqual(resumed["pending_gate"], "final_report_review")
+        self.assertEqual(resumed["current_phase"], "step3_humanizer_final")
+        self.assertIn("FinalReport", resumed["artifacts"])
+        self.assertIn("通过", resumed["next_action"])
+
+    def test_gate_driven_workflow_records_revision_request_instead_of_advancing(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(
+            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
+        )
+
+        revised = orchestrator.resume_gate_workflow(state, "改成只看车道级导航")
+
+        self.assertEqual(revised["status"], "revision_requested")
+        self.assertEqual(revised["pending_gate"], "audit_card_confirmed")
+        self.assertNotIn("SearchPlan", revised["artifacts"])
+        self.assertEqual(revised["user_decision"], "改成只看车道级导航")
+
+    def test_gate_driven_workflow_can_mark_final_report_complete(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(
+            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
+        )
+        waiting_final = orchestrator.resume_gate_workflow(state, "确认")
+
+        completed = orchestrator.resume_gate_workflow(waiting_final, "通过")
+
+        self.assertEqual(completed["status"], "complete")
+        self.assertEqual(completed["pending_gate"], None)
+        self.assertIn("FinalReport", completed["artifacts"])
+
 
 if __name__ == "__main__":
     unittest.main()

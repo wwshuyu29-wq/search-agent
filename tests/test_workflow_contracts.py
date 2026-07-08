@@ -161,6 +161,22 @@ class WorkflowContractsTest(unittest.TestCase):
         citation_phase = next(phase for phase in plan if phase["id"] == "step2_citation_audit")
         self.assertEqual(citation_phase["gate"], "citation_audit_passed")
 
+    def test_orchestration_plan_marks_human_gates_and_automatic_gates(self):
+        from workflow_contracts import get_orchestration_plan
+
+        plan = get_orchestration_plan()
+        gates = {phase["gate"]: phase for phase in plan}
+
+        self.assertEqual(gates["audit_card_confirmed"]["gate_type"], "human")
+        self.assertTrue(gates["audit_card_confirmed"]["halts_for_user"])
+        self.assertEqual(gates["search_plan_complete"]["gate_type"], "automatic")
+        self.assertFalse(gates["search_plan_complete"]["halts_for_user"])
+        self.assertEqual(
+            gates["source_qa_passed_or_user_resolved_conflict"]["gate_type"],
+            "conditional_human",
+        )
+        self.assertEqual(gates["final_report_style_only_changes"]["post_gate"], "final_report_review")
+
     def test_node_playbook_uses_user_requested_progression_fields(self):
         from workflow_contracts import get_node_playbook
 

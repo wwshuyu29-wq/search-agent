@@ -118,6 +118,32 @@ python bin/search_agent.py --codex-execution
 
 Codex 里不需要为节点 LLM 另配 OpenAI API Key；Codex 当前会话就是节点 LLM 执行环境。每个子 agent 都会被渲染成一份节点 prompt、artifact schema 和质量 gate，由 Codex 按顺序执行判断；Firecrawl、RSS、agent-reach、opencli 等外部检索工具才需要各自的环境配置。
 
+正式 gate-driven workflow 和 dry-run 不一样：dry-run 用来验证骨架，会一路跑到 FinalReport；正式流程必须先输出审核卡，等你确认后再继续。
+
+```bash
+python bin/search_agent.py "高德地图最近三个月上新，对百度地图市场组有什么启示" --workflow-start --state-file search_agent_state.json
+python bin/search_agent.py --workflow-resume 确认 --state-file search_agent_state.json
+python bin/search_agent.py --workflow-resume 通过 --state-file search_agent_state.json
+```
+
+### 提示词怎么写
+
+在 Codex 里使用时，不需要在提示词里手动写"请使用 sub agent"。只要明确写 `用 search-agent`，Codex 就应该按 `SKILL.md` 读取多 agent workflow、先输出审核卡、确认后再继续。
+
+推荐写法：
+
+```
+用 search-agent 帮我调研高德地图最近三个月上了什么新功能，
+面向百度地图市场组，先输出审核卡，等我确认后再继续。
+```
+
+如果你想强制 Codex 不要偷懒，可以加一句：
+
+```
+严格按多 agent workflow 执行：Intent Router 先判断意图，
+确认后再进入 Search Planner 和各 Source Hunter。
+```
+
 ### 常用触发模板
 
 直接复制发给 Codex，替换括号内容即可启动：
@@ -444,6 +470,8 @@ cd ~/.codex/skills/search-agent
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点"           # 交互式（有审核点）
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --auto    # 自动模式（跳过审核点①）
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --workflow-dry-run
+python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --workflow-start --state-file search_agent_state.json
+python3 bin/search_agent.py --workflow-resume 确认 --state-file search_agent_state.json
 python3 bin/search_agent.py --workflow-playbook
 python3 bin/search_agent.py --codex-execution
 ```

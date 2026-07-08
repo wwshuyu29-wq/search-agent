@@ -326,6 +326,56 @@ class SearchAgentSkill:
             print("\nFinalReport:")
             print(final_report["markdown"])
 
+    def start_gate_workflow(self, user_query: str, state_file: str = "search_agent_state.json") -> Dict:
+        """Start the formal gate-driven workflow and persist the pending audit state."""
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(user_query)
+        self._write_workflow_state(state, state_file)
+
+        audit_card = state["artifacts"]["AuditCard"]
+        print("Gate-Driven Workflow Started")
+        print("status: 等待用户确认")
+        print(f"pending_gate: {state['pending_gate']}")
+        print(f"state_file: {state_file}")
+        print("\nAuditCard:")
+        print(json.dumps(audit_card, ensure_ascii=False, indent=2))
+        print(f"\n下一步: {state['next_action']}")
+        return state
+
+    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json") -> Dict:
+        """Resume a persisted gate-driven workflow from a user decision."""
+        orchestrator = WorkflowOrchestrator()
+        previous_state = self._read_workflow_state(state_file)
+        state = orchestrator.resume_gate_workflow(previous_state, user_decision)
+        self._write_workflow_state(state, state_file)
+
+        print("Gate-Driven Workflow Resumed")
+        print(f"status: {state['status']}")
+        print(f"pending_gate: {state['pending_gate']}")
+        print(f"state_file: {state_file}")
+
+        if state["pending_gate"] == "final_report_review":
+            print("status_label: 等待终稿审核")
+            final_report = state["artifacts"].get("FinalReport", {})
+            if final_report.get("markdown"):
+                print("\nFinalReport:")
+                print(final_report["markdown"])
+        elif state["status"] == "complete":
+            print("status_label: 已完成")
+        elif state["status"] == "revision_requested":
+            print("status_label: 等待修订")
+
+        print(f"\n下一步: {state['next_action']}")
+        return state
+
+    def _write_workflow_state(self, state: Dict, state_file: str):
+        with open(state_file, "w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False, indent=2)
+
+    def _read_workflow_state(self, state_file: str) -> Dict:
+        with open(state_file, "r", encoding="utf-8") as file:
+            return json.load(file)
+
     def _print_step0_audit_context(self, step0_context: Dict):
         """Print Step 0 semantic fields and expert skill probes for CLI users."""
         fields = step0_context.get("semantic_fields", {})
@@ -517,6 +567,9 @@ def main():
     parser.add_argument("--auto", action="store_true", help="自动确认框架,跳过人工审核")
     parser.add_argument("--workflow-playbook", action="store_true", help="输出完整子 agent 推进手册")
     parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
+    parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
+    parser.add_argument("--workflow-resume", type=str, help="根据用户确认/修订意见恢复 gate-driven workflow")
+    parser.add_argument("--state-file", default="search_agent_state.json", help="gate-driven workflow 状态文件路径")
     parser.add_argument("--codex-execution", action="store_true", help="输出 Codex 内 LLM 调用与团队安装执行模型")
 
     args = parser.parse_args()
@@ -534,6 +587,16 @@ def main():
         if not args.query:
             parser.error("--workflow-dry-run 需要一个用户问题")
         agent.run_workflow_dry_run(args.query)
+        return
+
+    if args.workflow_start:
+        if not args.query:
+            parser.error("--workflow-start 需要一个用户问题")
+        agent.start_gate_workflow(args.query, state_file=args.state_file)
+        return
+
+    if args.workflow_resume:
+        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file)
         return
 
     if not args.query:

@@ -92,8 +92,18 @@ class WorkflowDocsTest(unittest.TestCase):
         self.assertIn("--workflow-dry-run", text)
         self.assertIn("--workflow-playbook", text)
         self.assertIn("--codex-execution", text)
+        self.assertIn("--workflow-start", text)
+        self.assertIn("--workflow-resume", text)
         self.assertIn("Multi-Agent Workflow Dry Run", text)
         self.assertIn("Codex 里不需要为节点 LLM 另配 OpenAI API Key", text)
+
+    def test_usage_explains_user_does_not_need_to_name_subagents(self):
+        text = (REPO_ROOT / "USAGE.md").read_text(encoding="utf-8")
+
+        self.assertIn("不需要在提示词里手动写", text)
+        self.assertIn("sub agent", text)
+        self.assertIn("先输出审核卡", text)
+        self.assertIn("确认后再继续", text)
 
     def test_install_script_checks_codex_execution_reference(self):
         text = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")

@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import tempfile
 import unittest
@@ -114,6 +115,46 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("step3_humanizer_final", printed)
         self.assertIn("FinalReport", printed)
         self.assertIn("status: complete", printed)
+
+    def test_cli_gate_workflow_start_writes_pending_audit_state(self):
+        agent = SearchAgentSkill()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "search_agent_state.json"
+            with patch("builtins.print") as mocked_print:
+                state = agent.start_gate_workflow(
+                    "高德地图最近三个月上新，对百度地图市场组有什么启示",
+                    str(state_file),
+                )
+
+            saved = json.loads(state_file.read_text(encoding="utf-8"))
+            printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+
+        self.assertEqual(state["pending_gate"], "audit_card_confirmed")
+        self.assertEqual(saved["pending_gate"], "audit_card_confirmed")
+        self.assertIn("AuditCard", saved["artifacts"])
+        self.assertNotIn("SearchPlan", saved["artifacts"])
+        self.assertIn("等待用户确认", printed)
+
+    def test_cli_gate_workflow_resume_confirmation_writes_final_review_state(self):
+        agent = SearchAgentSkill()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "search_agent_state.json"
+            agent.start_gate_workflow(
+                "高德地图最近三个月上新，对百度地图市场组有什么启示",
+                str(state_file),
+            )
+            with patch("builtins.print") as mocked_print:
+                state = agent.resume_gate_workflow("确认", str(state_file))
+
+            saved = json.loads(state_file.read_text(encoding="utf-8"))
+            printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+
+        self.assertEqual(state["pending_gate"], "final_report_review")
+        self.assertEqual(saved["pending_gate"], "final_report_review")
+        self.assertIn("FinalReport", saved["artifacts"])
+        self.assertIn("等待终稿审核", printed)
 
     def test_cli_can_print_codex_execution_model(self):
         agent = SearchAgentSkill()

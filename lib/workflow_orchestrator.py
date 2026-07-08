@@ -148,6 +148,61 @@ class WorkflowOrchestrator:
             "artifacts": artifacts,
         }
 
+    def start_gate_workflow(self, user_query: str) -> Dict[str, Any]:
+        """Start the formal gate-driven workflow and stop after the Step 0 audit card."""
+        artifacts: Dict[str, Any] = {"RawUserQuery": user_query}
+        validations: List[Dict[str, Any]] = []
+        phase_results: List[Dict[str, Any]] = []
+
+        intent_brief, audit_card = self._build_dry_step0(user_query)
+        artifacts["IntentBrief"] = intent_brief
+        artifacts["AuditCard"] = audit_card
+        validations.extend(self._validate_many({"IntentBrief": intent_brief, "AuditCard": audit_card}))
+        phase_results.append(self._phase_result("step0_intent_and_audit", ["IntentBrief", "AuditCard"]))
+
+        valid = all(validation["valid"] for validation in validations)
+        return self._workflow_state(
+            status="waiting_for_user" if valid else "blocked",
+            current_phase="step0_intent_and_audit",
+            pending_gate="audit_card_confirmed" if valid else "audit_card_invalid",
+            artifacts=artifacts,
+            validations=validations,
+            phase_results=phase_results,
+            next_action=(
+                "请审核 AuditCard；回复确认进入 Search Planner，或说明要修改的框架、关键词、来源范围。"
+            ),
+        )
+
+    def resume_gate_workflow(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
+        """Resume a gate-driven workflow from the user's decision."""
+        pending_gate = state.get("pending_gate")
+        normalized_decision = (user_decision or "").strip()
+
+        if pending_gate == "audit_card_confirmed":
+            if not self._is_confirmation(normalized_decision):
+                revised = deepcopy(state)
+                revised["status"] = "revision_requested"
+                revised["user_decision"] = normalized_decision
+                revised["next_action"] = "已记录修改意见；请先更新 AuditCard，再次输出给用户确认。"
+                revised["updated_at"] = self._timestamp()
+                return revised
+            return self._run_after_audit_confirmation(state, normalized_decision)
+
+        if pending_gate == "final_report_review":
+            reviewed = deepcopy(state)
+            reviewed["user_decision"] = normalized_decision
+            reviewed["updated_at"] = self._timestamp()
+            if self._is_final_approval(normalized_decision):
+                reviewed["status"] = "complete"
+                reviewed["pending_gate"] = None
+                reviewed["next_action"] = "FinalReport 已通过，可以归档或进入后续行动。"
+            else:
+                reviewed["status"] = "revision_requested"
+                reviewed["next_action"] = "已记录终稿修订意见；Report Writer/Humanizer 只能按修订清单改。"
+            return reviewed
+
+        raise ValueError(f"Cannot resume workflow from pending_gate={pending_gate!r}")
+
     def _missing_fields(self, artifact_name: str, artifact: Any, required_fields: List[str]) -> List[str]:
         if artifact_name == "SearchPlan":
             return self._missing_search_plan_fields(artifact, required_fields)
@@ -199,6 +254,101 @@ class WorkflowOrchestrator:
 
     def _validate_many(self, artifacts: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [self.validate_artifact(name, artifact) for name, artifact in artifacts.items()]
+
+    def _workflow_state(
+        self,
+        status: str,
+        current_phase: str,
+        pending_gate: str,
+        artifacts: Dict[str, Any],
+        validations: List[Dict[str, Any]],
+        phase_results: List[Dict[str, Any]],
+        next_action: str,
+        user_decision: str = "",
+    ) -> Dict[str, Any]:
+        now = self._timestamp()
+        return {
+            "schema_version": "workflow_state.v1",
+            "status": status,
+            "current_phase": current_phase,
+            "pending_gate": pending_gate,
+            "artifacts": artifacts,
+            "validations": validations,
+            "phase_results": phase_results,
+            "next_action": next_action,
+            "user_decision": user_decision,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    def _run_after_audit_confirmation(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
+        artifacts = deepcopy(state["artifacts"])
+        validations = deepcopy(state.get("validations", []))
+        phase_results = deepcopy(state.get("phase_results", []))
+
+        audit_card = artifacts["AuditCard"]
+        intent_brief = artifacts["IntentBrief"]
+
+        search_plan = self._build_dry_search_plan(audit_card)
+        artifacts["SearchPlan"] = search_plan
+        validations.append(self.validate_artifact("SearchPlan", search_plan))
+        phase_results.append(self._phase_result("step1_search_planning", ["SearchPlan"]))
+
+        source_list = self._build_dry_source_list()
+        artifacts["SourceList"] = source_list
+        validations.append(self.validate_artifact("SourceList", source_list))
+        phase_results.append(self._phase_result("step1_parallel_source_hunting", ["SourceList"]))
+
+        source_qa_notes, clean_source_list = self._build_dry_source_qa(source_list)
+        artifacts["SourceQANotes"] = source_qa_notes
+        artifacts["CleanSourceList"] = clean_source_list
+        validations.extend(
+            self._validate_many(
+                {"SourceQANotes": source_qa_notes, "CleanSourceList": clean_source_list}
+            )
+        )
+        phase_results.append(self._phase_result("step1_source_qa", ["SourceQANotes", "CleanSourceList"]))
+
+        claim_graph = self._build_dry_claim_graph(clean_source_list)
+        artifacts["ClaimGraph"] = claim_graph
+        validations.append(self.validate_artifact("ClaimGraph", claim_graph))
+        phase_results.append(self._phase_result("step2_analysis_and_specialists", ["ClaimGraph"]))
+
+        citation_audit = self._build_dry_citation_audit(claim_graph)
+        artifacts["CitationAudit"] = citation_audit
+        validations.append(self.validate_artifact("CitationAudit", citation_audit))
+        phase_results.append(self._phase_result("step2_citation_audit", ["CitationAudit"]))
+
+        report_draft = self._build_dry_report_draft(intent_brief, clean_source_list, claim_graph)
+        artifacts["ReportDraft"] = report_draft
+        validations.append(self.validate_artifact("ReportDraft", report_draft))
+        phase_results.append(self._phase_result("step3_report_draft", ["ReportDraft"]))
+
+        final_report = self._build_dry_final_report(report_draft, clean_source_list)
+        artifacts["FinalReport"] = final_report
+        validations.append(self.validate_artifact("FinalReport", final_report))
+        phase_results.append(self._phase_result("step3_humanizer_final", ["FinalReport"]))
+
+        valid = all(validation["valid"] for validation in validations)
+        return self._workflow_state(
+            status="waiting_for_user" if valid else "blocked",
+            current_phase="step3_humanizer_final",
+            pending_gate="final_report_review" if valid else "artifact_validation_failed",
+            artifacts=artifacts,
+            validations=validations,
+            phase_results=phase_results,
+            next_action="请审核 FinalReport；回复通过完成，或提出具体修订意见。",
+            user_decision=user_decision,
+        )
+
+    def _is_confirmation(self, user_decision: str) -> bool:
+        return user_decision in {"确认", "同意", "可以", "继续", "ok", "OK", "yes", "Yes", "YES"}
+
+    def _is_final_approval(self, user_decision: str) -> bool:
+        return user_decision in {"通过", "确认", "同意", "可以", "ok", "OK", "yes", "Yes", "YES"}
+
+    def _timestamp(self) -> str:
+        return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
     def _phase_result(self, phase_id: str, output_artifacts: List[str]) -> Dict[str, Any]:
         phase = next(phase for phase in self.orchestration_plan if phase["id"] == phase_id)

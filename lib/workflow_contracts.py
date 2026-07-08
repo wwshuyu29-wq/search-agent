@@ -487,6 +487,9 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["IntentBrief", "AuditCard"],
         "parallel": False,
         "gate": "audit_card_confirmed",
+        "gate_type": "human",
+        "halts_for_user": True,
+        "user_prompt": "Review AuditCard; reply 确认 to continue or provide revisions.",
     },
     {
         "id": "step1_search_planning",
@@ -496,6 +499,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["SearchPlan"],
         "parallel": False,
         "gate": "search_plan_complete",
+        "gate_type": "automatic",
+        "halts_for_user": False,
     },
     {
         "id": "step1_parallel_source_hunting",
@@ -512,6 +517,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["SourceList"],
         "parallel": True,
         "gate": "source_list_complete",
+        "gate_type": "automatic",
+        "halts_for_user": False,
     },
     {
         "id": "step1_source_qa",
@@ -521,6 +528,9 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["SourceQANotes", "CleanSourceList"],
         "parallel": False,
         "gate": "source_qa_passed_or_user_resolved_conflict",
+        "gate_type": "conditional_human",
+        "halts_for_user": "only_when_conflict_or_missing_key_source",
+        "user_prompt": "Resolve numeric conflicts or key source gaps before analysis.",
     },
     {
         "id": "step2_analysis_and_specialists",
@@ -530,6 +540,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["ClaimGraph"],
         "parallel": True,
         "gate": "claim_graph_complete",
+        "gate_type": "automatic",
+        "halts_for_user": False,
     },
     {
         "id": "step2_citation_audit",
@@ -539,6 +551,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["CitationAudit"],
         "parallel": False,
         "gate": "citation_audit_passed",
+        "gate_type": "automatic_hard_block",
+        "halts_for_user": False,
     },
     {
         "id": "step3_report_draft",
@@ -548,6 +562,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["ReportDraft"],
         "parallel": False,
         "gate": "report_draft_preserves_citations",
+        "gate_type": "automatic",
+        "halts_for_user": False,
     },
     {
         "id": "step3_humanizer_final",
@@ -557,6 +573,10 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "output_artifacts": ["FinalReport"],
         "parallel": False,
         "gate": "final_report_style_only_changes",
+        "gate_type": "automatic_then_human",
+        "halts_for_user": True,
+        "post_gate": "final_report_review",
+        "user_prompt": "Review FinalReport; reply 通过 to complete or provide specific revision notes.",
     },
 ]
 
