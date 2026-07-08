@@ -4,6 +4,8 @@
 
 **核心工作流程（每次收到调研请求必须严格执行，不得跳过任何步骤）：**
 
+**节点执行契约**：Step 0-3 的子 agent 设定、LLM 语义理解、专家 skill 前置、报告生成逻辑，统一遵守 `references/agent-nodes.md`；每个子 agent 的推进方式见 `references/node-playbook.md`；Codex 中 LLM 调用模型见 `references/codex-execution.md`；可执行契约统一维护在 `lib/workflow_contracts.py`。其中 `lib/intent_classifier.py` 只作为规则/关键词分类器兜底，不得替代 LLM 语义理解。最终报告必须经过 Humanizer Editor Agent 去 AI 味，保留证据链但去掉模板腔。
+
 ```
 用户输入调研需求
     ↓
@@ -21,6 +23,18 @@ Step 3：生成调研报告 → 金字塔结构 + 参考文献区（原文链接
 ## Step 0：意图识别 & 框架路由
 
 收到用户 query 后**立即执行**，不跳过，不假设，不提前开始搜索。
+
+### Step 0 决策栈（强制）
+
+Step 0 不是简单关键词匹配，必须按以下顺序判断：
+
+1. **LLM 语义理解层**：先理解用户的真实业务决策、对象、读者、时间范围、输出形态、证据需求和不确定项；增长类、单一金融数字、竞品、营销方案等分类按整句语义判断，关键词只是提示信号。
+2. **专家 skill 前置探针**：命中触发条件时先使用 `marketing-ideas`、`marketing-plan`、`startup-analysis`、`yfinance-data/funda-data` 等专家 skill 帮助定框架或短路回答。
+3. **规则/关键词分类器**：再用 `lib/intent_classifier.py` 做可复现校验和 CLI 兜底。
+4. **框架组合器**：用 `framework_combinator.py` 组合最小可用框架，不为了显得全面而堆框架。
+5. **审核卡片**：必须说明语义判断依据、拟使用 skill、框架选择原因和可调整项，然后停下等待确认。
+
+专家 skill 触发规则和子 agent 约束详见 `references/agent-nodes.md`。若 LLM 语义判断与关键词分类器冲突，以 LLM 判断为主，并在审核卡片里说明冲突。
 
 ### 框架路由表
 
@@ -202,7 +216,18 @@ sources:
 
 ## Step 3：调研报告生成
 
-### 报告结构（金字塔原则，严格遵守）
+### 报告结构（结论先行，不硬套模板）
+
+报告不是固定填空模板。Step 3 必须先读取 Citation Auditor Agent 通过的 ClaimGraph，再由 Report Writer Agent 按读者和决策选择报告形态。可执行报告形态选择见 `lib/workflow_contracts.py`，包括：
+
+- `Executive Decision Memo`：市场组/业务动作/竞品反制，先给判断和动作。
+- `Deep Research Report`：复杂行业/战略研究，保留框架推理链。
+- `Competitive Battlecard`：竞品对比，突出差距、证据和应对话术。
+- `Finance / Investment Note`：财报/估值/投资判断，突出数字口径、驱动和风险。
+- `Growth / GTM Plan`：增长/营销方案，突出目标、杠杆、实验和指标。
+- `Evidence Brief`：单一事实/单一金融数字，只给答案、来源、时间戳和限制。
+
+下方结构是默认骨架，不是硬性话术。支撑理由按证据强度保留 2-5 条，默认 3 条只是方便业务读者扫描；证据不足时不得凑满。
 
 ```markdown
 # [调研主题] 调研报告
@@ -220,7 +245,7 @@ sources:
 支撑理由：
 1. [理由1]（置信度：高）（来源：[FC001](URL)）
 2. [理由2]（置信度：中）（来源：[FC002](URL)）
-3. [理由3]（置信度：高）（来源：[FC003](URL)）
+3. [理由3，可选]（置信度：高）（来源：[FC003](URL)）
 
 主要风险：[1-2个关键风险]
 

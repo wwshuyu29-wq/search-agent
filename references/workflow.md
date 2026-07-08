@@ -6,7 +6,12 @@
 graph TD
     Start[用户输入调研需求] --> Step0[Step 0: 意图识别 & 框架路由]
 
-    Step0 --> Complex{复杂度判断<br/>全面/系统/多维度?}
+    Step0 --> Semantic[LLM 语义理解<br/>对象/决策/读者/时间/证据]
+    Semantic --> SkillProbe{专家 skill 前置?<br/>marketing / finance / startup}
+    SkillProbe -->|命中| ExpertSkill[调用或列入前置 skill<br/>marketing-ideas / marketing-plan<br/>startup-analysis / yfinance-data]
+    SkillProbe -->|未命中| RuleCheck[规则/关键词分类器校验]
+    ExpertSkill --> RuleCheck
+    RuleCheck --> Complex{复杂度判断<br/>全面/系统/多维度?}
     Complex -->|是| RouteCombo[从 framework 组合表选组合]
     Complex -->|否| RouteSingle[从 framework 路由表选单框架]
 
@@ -62,6 +67,9 @@ graph TD
     style Step1 fill:#f3e5f5
     style Step3 fill:#ffe0b2
     style Card fill:#ffccbc
+    style Semantic fill:#e8f5e9
+    style SkillProbe fill:#e8f5e9
+    style ExpertSkill fill:#e8f5e9
 ```
 
 ## 与 CLAUDE.md 的差异（v3.0 融合后）
@@ -78,3 +86,4 @@ graph TD
 3. **引文透明**：每个论断绑定 source_id，报告末尾必须列参考文献表
 4. **两个人工闸门**：审核点①（选框架）+ 审核点②（校引文/结论）
 5. **可扩展**：新框架加 `references/frameworks.md` + `lib/frameworks.py`；新源加脚本 + 更新 SKILL.md Step 1
+6. **LLM 先于规则**：Step 0 先做语义理解和专家 skill 前置，`intent_classifier.py` 只是校验与 CLI 兜底；完整子 agent 契约见 `references/agent-nodes.md`

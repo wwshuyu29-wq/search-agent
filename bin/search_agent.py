@@ -23,10 +23,12 @@ from typing import List, Dict
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
 
 from frameworks import ANALYSIS_FRAMEWORKS, get_framework_by_name, get_search_keywords
-from intent_classifier import classify_intent
+from intent_classifier import build_step0_context, classify_intent
 from framework_combinator import FrameworkCombinator, recommend_framework_combination
 from search_engine import SearchEngine
 from report_generator import ReportGenerator
+from workflow_contracts import render_codex_execution_markdown, render_workflow_playbook_markdown
+from workflow_orchestrator import WorkflowOrchestrator
 
 
 class SearchAgentSkill:
@@ -52,7 +54,17 @@ class SearchAgentSkill:
         print(f"【用户问题】: {user_query}\n")
 
         # Step 1: 意图识别,推荐分析框架
-        print("Step 1: 分析用户意图,推荐分析框架...\n")
+        print("Step 0: LLM 语义理解 + 专家 skill 前置 + 规则分类校验...\n")
+        step0_context = build_step0_context(user_query)
+        self._print_step0_audit_context(step0_context)
+
+        if step0_context.get("short_circuit"):
+            print("检测到单一数字/结构化数据查询，建议直接调用专家数据 skill 后结束。")
+            print("如仍需完整调研报告，请重新运行并明确说明需要分析。\n")
+            print("已停止完整调研流程。")
+            return
+
+        print("规则/关键词分类器校验框架推荐...\n")
         recommendations = classify_intent(user_query, top_k=3, return_complexity=True)
 
         if not recommendations:
@@ -275,6 +287,87 @@ class SearchAgentSkill:
         print("分析完成!")
         print(f"{'='*60}\n")
 
+    def print_workflow_playbook(self):
+        """Print the full multi-agent node playbook."""
+        print(render_workflow_playbook_markdown())
+
+    def print_codex_execution_model(self):
+        """Print how the workflow runs inside Codex."""
+        print(render_codex_execution_markdown())
+
+    def run_workflow_dry_run(self, user_query: str):
+        """Run the artifact-only multi-agent workflow for validation."""
+        orchestrator = WorkflowOrchestrator()
+        result = orchestrator.run_dry_workflow(user_query)
+
+        print("Multi-Agent Workflow Dry Run")
+        print(f"status: {result['status']}")
+        print(f"valid: {result['valid']}")
+        print("\nPhases:")
+        for phase in result["phase_results"]:
+            print(
+                "- {id} | nodes={nodes} | gate={gate} | outputs={outputs}".format(
+                    id=phase["id"],
+                    nodes=", ".join(phase["nodes"]),
+                    gate=phase["gate"],
+                    outputs=", ".join(phase["output_artifacts"]),
+                )
+            )
+
+        print("\nArtifact validations:")
+        for validation in result["validations"]:
+            status = "ok" if validation["valid"] else "blocked"
+            print(f"- {validation['artifact']}: {status}")
+            if validation["missing_fields"]:
+                print(f"  missing: {', '.join(validation['missing_fields'])}")
+
+        final_report = result["artifacts"].get("FinalReport")
+        if final_report:
+            print("\nFinalReport:")
+            print(final_report["markdown"])
+
+    def _print_step0_audit_context(self, step0_context: Dict):
+        """Print Step 0 semantic fields and expert skill probes for CLI users."""
+        fields = step0_context.get("semantic_fields", {})
+        print("Step 0 决策栈:")
+        for idx, item in enumerate(step0_context.get("decision_stack", []), 1):
+            print(f"  {idx}. {item}")
+        print("\nLLM 语义理解字段（CLI 为启发式兜底，Codex 原生需用 LLM 判断）:")
+        for key in [
+            "research_object",
+            "user_decision",
+            "audience",
+            "time_scope",
+            "output_shape",
+            "evidence_need",
+            "ambiguity",
+        ]:
+            print(f"  - {key}: {fields.get(key)}")
+
+        preflight_skills = step0_context.get("preflight_skills", [])
+        print("\n专家 skill 前置建议:")
+        if not preflight_skills:
+            print("  - 无强制前置 skill；进入框架路由")
+        else:
+            for skill in preflight_skills:
+                print(f"  - {skill['skill']} ({skill['step']}): {skill['reason']}")
+
+        report_family = step0_context.get("report_family") or {}
+        if report_family:
+            print("\n建议报告形态:")
+            print(f"  - {report_family.get('name')} ({report_family.get('id')})")
+            print(f"  - 结构逻辑: {report_family.get('shape')}")
+
+        node_chain_preview = step0_context.get("node_chain_preview") or []
+        if node_chain_preview:
+            print("\n后续子 agent 链（确认后按此推进）:")
+            for idx, node_summary in enumerate(node_chain_preview, 1):
+                print(f"  {idx}. {node_summary}")
+        print("\n分类说明:")
+        print("  - CLI 只输出语义字段和规则信号；Codex 原生执行时必须用 LLM 复核整句意图。")
+        print("  - 增长类、单一金融数字、竞品、营销方案等不是靠固定关键词封闭判断。")
+        print()
+
     def _generate_combination_report(
         self,
         combination_name: str,
@@ -420,12 +513,32 @@ class SearchAgentSkill:
 def main():
     """命令行入口"""
     parser = argparse.ArgumentParser(description="Search Agent 智能分析系统")
-    parser.add_argument("query", type=str, help="用户问题")
+    parser.add_argument("query", type=str, nargs="?", help="用户问题")
     parser.add_argument("--auto", action="store_true", help="自动确认框架,跳过人工审核")
+    parser.add_argument("--workflow-playbook", action="store_true", help="输出完整子 agent 推进手册")
+    parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
+    parser.add_argument("--codex-execution", action="store_true", help="输出 Codex 内 LLM 调用与团队安装执行模型")
 
     args = parser.parse_args()
 
     agent = SearchAgentSkill()
+    if args.workflow_playbook:
+        agent.print_workflow_playbook()
+        return
+
+    if args.codex_execution:
+        agent.print_codex_execution_model()
+        return
+
+    if args.workflow_dry_run:
+        if not args.query:
+            parser.error("--workflow-dry-run 需要一个用户问题")
+        agent.run_workflow_dry_run(args.query)
+        return
+
+    if not args.query:
+        parser.error("缺少用户问题；或使用 --workflow-playbook 查看完整子 agent 推进手册")
+
     agent.run(args.query, auto_confirm=args.auto)
 
 

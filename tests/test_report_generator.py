@@ -129,6 +129,100 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertNotIn("待填充", report)
         self.assertNotIn("来源1", report)
 
+    def test_structured_report_humanizer_removes_empty_ai_transitions_but_keeps_citations(self):
+        report_module = load_module(
+            "report_generator_for_humanizer_test",
+            REPO_ROOT / "lib" / "report_generator.py",
+        )
+        generator = report_module.ReportGenerator()
+
+        sources = [
+            {
+                "source_id": "SRC001",
+                "title": "官方更新",
+                "publisher": "Official",
+                "source_type": "官方",
+                "publish_date": "2026-07-01",
+                "url": "https://example.com/source",
+                "confidence": "high",
+            }
+        ]
+        analysis = {
+            "core_judgment": "值得注意的是，百度地图应优先验证暑期出行场景。",
+            "supporting_reasons": [
+                {
+                    "claim": "从多个维度来看，暑期出行需求集中在旅游和亲子场景。",
+                    "source_ids": ["SRC001"],
+                    "confidence": "medium",
+                }
+            ],
+            "sections": [],
+        }
+
+        report = generator.generate_structured_report(
+            subject="百度地图暑期增长",
+            framework_name="4P + AARRR",
+            sources=sources,
+            analysis=analysis,
+            generated_at="2026-07-08 10:00:00",
+        )
+
+        self.assertNotIn("值得注意的是，", report)
+        self.assertNotIn("从多个维度来看，", report)
+        self.assertIn("[SRC001](https://example.com/source)", report)
+
+    def test_structured_report_records_report_family_and_allows_two_reasons(self):
+        report_module = load_module(
+            "report_generator_for_family_test",
+            REPO_ROOT / "lib" / "report_generator.py",
+        )
+        generator = report_module.ReportGenerator()
+
+        sources = [
+            {
+                "source_id": "SRC001",
+                "title": "官方来源",
+                "publisher": "Official",
+                "source_type": "官方",
+                "publish_date": "2026-07-01",
+                "url": "https://example.com/official",
+                "confidence": "high",
+            },
+            {
+                "source_id": "SRC002",
+                "title": "用户反馈",
+                "publisher": "UGC",
+                "source_type": "UGC",
+                "publish_date": "2026-07-02",
+                "url": "https://example.com/ugc",
+                "confidence": "low",
+            },
+        ]
+        analysis = {
+            "user_decision": "形成业务动作或策略建议",
+            "audience": "市场组",
+            "core_judgment": "百度地图应优先验证暑期亲子出行入口，而不是铺开泛旅游投放。",
+            "supporting_reasons": [
+                {"claim": "官方来源显示暑期功能入口已上线。", "source_ids": ["SRC001"], "confidence": "high"},
+                {"claim": "UGC 反馈集中在亲子和跨城出行。", "source_ids": ["SRC002"], "confidence": "low"},
+            ],
+            "sections": [],
+        }
+
+        report = generator.generate_structured_report(
+            subject="百度地图暑期增长",
+            framework_name="4P + AARRR",
+            sources=sources,
+            analysis=analysis,
+            generated_at="2026-07-08 11:00:00",
+        )
+
+        self.assertIn("**报告形态**：Executive Decision Memo", report)
+        self.assertIn("1. 官方来源显示暑期功能入口已上线。", report)
+        self.assertIn("2. UGC 反馈集中在亲子和跨城出行。", report)
+        self.assertNotIn("3. ", report)
+        self.assertNotIn("三个关键发现", report)
+
 
 if __name__ == "__main__":
     unittest.main()

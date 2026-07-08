@@ -94,6 +94,30 @@ agent-reach doctor --json
 python scripts/search_agent_doctor.py --live
 ```
 
+### 多 agent workflow 自检
+
+doctor 检查的是工具环境；workflow dry-run 检查的是多 agent 编排本身是否能跑通。它不联网、不产出真实业务结论，只验证每个子 agent 的 artifact、schema 和 gate 是否能从 Step 0 一路走到 FinalReport。
+
+```bash
+python bin/search_agent.py "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示" --workflow-dry-run
+```
+
+看到 `Multi-Agent Workflow Dry Run`、`status: complete`、所有 artifact validations 都是 `ok`，说明本地多 agent 骨架是自洽的。
+
+想查看每个子 agent 的推进逻辑：
+
+```bash
+python bin/search_agent.py --workflow-playbook
+```
+
+想确认 Codex 里 LLM 到底怎么被调用：
+
+```bash
+python bin/search_agent.py --codex-execution
+```
+
+Codex 里不需要为节点 LLM 另配 OpenAI API Key；Codex 当前会话就是节点 LLM 执行环境。每个子 agent 都会被渲染成一份节点 prompt、artifact schema 和质量 gate，由 Codex 按顺序执行判断；Firecrawl、RSS、agent-reach、opencli 等外部检索工具才需要各自的环境配置。
+
 ### 常用触发模板
 
 直接复制发给 Codex，替换括号内容即可启动：
@@ -125,6 +149,8 @@ python scripts/search_agent_doctor.py --live
 ### T1 · 需求理解 & 框架审核
 
 **目标**：把你的一句话需求，转化成"用哪个框架 + 拆哪些维度 + 搜哪些关键词 + 从哪些源找"。
+
+底层执行遵守 `references/agent-nodes.md`：先由 LLM 语义理解层判断真实业务决策，再触发专家 skill 前置探针，最后才用规则/关键词分类器和框架组合器做校验。`marketing-ideas`、`marketing-plan`、`startup-analysis`、`yfinance-data/funda-data` 在命中场景时会先参与 Step 0，而不是等到报告后才使用。
 
 #### 你需要做什么
 
@@ -417,6 +443,9 @@ Codex prompt 走不通时可以纯 CLI：
 cd ~/.codex/skills/search-agent
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点"           # 交互式（有审核点）
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --auto    # 自动模式（跳过审核点①）
+python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --workflow-dry-run
+python3 bin/search_agent.py --workflow-playbook
+python3 bin/search_agent.py --codex-execution
 ```
 
 ⚠️ CLI 自动模式不推荐生产使用——它跳过了框架审核这个人工闸门。

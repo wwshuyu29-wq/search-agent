@@ -6,11 +6,32 @@
 
 from datetime import datetime
 from collections import Counter
+from pathlib import Path
+import sys
 from typing import Any, List, Dict, Optional
+
+LIB_DIR = Path(__file__).resolve().parent
+if str(LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(LIB_DIR))
+
+from workflow_contracts import recommend_report_family
 
 
 class ReportGenerator:
     """分析报告生成器"""
+
+    AI_STYLE_REPLACEMENTS = {
+        "值得注意的是，": "",
+        "值得注意的是,": "",
+        "从多个维度来看，": "",
+        "从多个维度来看,": "",
+        "综上所述，": "",
+        "综上所述,": "",
+        "总体而言，": "",
+        "总体而言,": "",
+        "可以看出，": "",
+        "可以看出,": "",
+    }
 
     # 报告模板
     REPORT_TEMPLATES = {
@@ -307,6 +328,7 @@ class ReportGenerator:
                 sources=structured_sources,
                 analysis=structured_analysis,
                 generated_at=kwargs.get("generated_at"),
+                report_family=kwargs.get("report_family"),
             )
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -364,15 +386,18 @@ class ReportGenerator:
         sources: List[Dict[str, Any]],
         analysis: Dict[str, Any],
         generated_at: Optional[str] = None,
+        report_family: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Generate a source-backed Markdown report from T2/T3 structured data."""
         timestamp = generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         source_map = self._build_source_map(sources)
+        selected_report_family = report_family or recommend_report_family(analysis)
         lines = [
             f"# {subject}",
             "",
             f"**生成时间**：{timestamp}",
             f"**分析框架**：{framework_name}",
+            f"**报告形态**：{selected_report_family.get('name', 'Deep Research Report')}",
             f"**信息源数量**：{len(sources)} 条",
             "",
             "---",
@@ -449,7 +474,7 @@ class ReportGenerator:
                 )
 
         lines.extend(self._render_references(sources))
-        return "\n".join(lines).rstrip() + "\n"
+        return self._humanize_report_style("\n".join(lines).rstrip() + "\n")
 
     def _build_source_map(self, sources: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         source_map = {}
@@ -523,6 +548,18 @@ class ReportGenerator:
 
     def _clean_table_cell(self, value: Any) -> str:
         return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+    def _humanize_report_style(self, report: str) -> str:
+        """
+        Conservative Humanizer Editor pass.
+
+        Keep citations, numbers, and structure intact. Only remove empty AI-like
+        transitions that add no evidence or meaning.
+        """
+        cleaned = report
+        for old, new in self.AI_STYLE_REPLACEMENTS.items():
+            cleaned = cleaned.replace(old, new)
+        return cleaned
 
     def _generate_dimension_sections(
         self,
