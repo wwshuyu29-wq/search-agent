@@ -36,6 +36,31 @@ The missing layer is an orchestrator that forces every agent to consume and prod
 4. **Parallelize only independent work.** Search across source classes can run in parallel; citation audit must wait for a complete draft.
 5. **Human gates protect direction and trust.** The user confirms the audit card before search; citation failure blocks final report.
 6. **Natural report, not AI template.** The report uses conclusion-first logic, then Humanizer Editor removes generic AI scaffolding.
+7. **Every judgment node uses an LLM.** Tools fetch evidence, calculate metrics, or enforce schemas. LLM agents interpret meaning, choose tradeoffs, synthesize claims, challenge weak evidence, and adapt the report to the reader.
+
+## LLM Responsibility Model
+
+The workflow is not "LLM only in Step 0, tools afterward." Every node that makes a judgment needs an LLM. The orchestration rule is:
+
+```text
+LLM = judgment, synthesis, framing, tradeoff, writing
+Tool/skill = retrieval, structured data, deterministic checks, domain method, rendering
+Artifact = durable handoff between agents
+```
+
+| Node | LLM responsibility | Tool/skill responsibility | Output quality bar |
+|---|---|---|---|
+| Intent Router | Understand the user's real business decision, infer audience, detect ambiguity, decide whether to ask or proceed | `intent_classifier.py`, `framework_combinator.py`, `marketing-ideas`, `marketing-plan`, `startup-analysis`, `yfinance-data/funda-data` as probes/fallbacks | Audit card explains semantic reasoning, not just keyword hits |
+| Search Planner | Translate the confirmed question into evidence requirements; decide which source class can prove each claim | `references/search-platforms.md`, keyword expansion, framework templates | Every framework dimension has a search task and expected evidence |
+| Source Hunter | Judge which results are relevant enough to keep; decide whether a result is official, duplicate, secondary, or sentiment-only | Firecrawl, realtime-search, RSS, agent-reach, finance/marketing data skills | Source YAML contains key facts and confidence rationale |
+| Source QA | Challenge source quality, identify missing evidence, reconcile date/metric conflicts | URL normalization, duplicate checks, date parsing, numeric comparison | High-impact conflicts are explicit and can pause the run |
+| Framework Analyst | Turn sources into dimension-level claims; separate fact/calculation/assumption/judgment; reason across sources | Framework definitions, specialist skill outputs | ClaimGraph is source-backed and decision-relevant |
+| Specialist Agents | Apply domain judgment: finance, marketing, user research, competitor strategy | Domain skills such as `company-valuation`, `customer-research`, `competitor-profiling`, `pricing` | Adds insight a generic analyst would miss |
+| Citation Auditor | Read claim and source together; decide whether the source actually supports the sentence | Source map, citation existence checks | Unsupported claims are blocked or downgraded |
+| Report Writer | Choose the right narrative shape for the reader; compress claim graph into a useful decision document | Report schema, reference table renderer | Report answers the decision, not just the framework |
+| Humanizer Editor | Remove AI-like structure and stiff language while preserving meaning | `humanizer`, `copy-editing`, conservative phrase cleanup | Final report reads like a sharp internal research note |
+
+LLM agents must record their judgment basis inside artifacts. For example, Source QA does not only say `confidence=medium`; it should say "medium because the article is a secondary media report and the original company post was unavailable."
 
 ## Architecture
 
@@ -288,6 +313,8 @@ The final pass removes:
 - Route failed audits back to the right agent.
 - Never create factual claims itself.
 
+**LLM role:** Minimal. The orchestrator may summarize current state for handoff, but it must not infer business conclusions or rewrite claims. Its job is control flow.
+
 ### Intent Router Agent
 
 **Purpose:** Understand the user decision and route the framework.
@@ -305,6 +332,8 @@ The final pass removes:
 
 **Hard rule:** Search is forbidden before user confirmation.
 
+**LLM role:** Mandatory. It must read the whole user request, infer unstated business context, and decide when a keyword match is misleading. Example: "给市场组一个方案" means the output needs implications/actions, not necessarily a full generic marketing plan.
+
 ### Search Planner Agent
 
 **Purpose:** Translate the confirmed AuditCard into an executable SearchPlan.
@@ -316,6 +345,8 @@ The final pass removes:
 - keyword expansion rules from `SKILL.md`
 
 **Output:** `SearchPlan`.
+
+**LLM role:** Mandatory. It must decide what kind of evidence would actually prove each dimension. Example: a "用户痛点" dimension needs UGC/user research; a "是否已发布" dimension needs official/app-store evidence.
 
 ### Source Hunter Agents
 
@@ -332,6 +363,8 @@ The final pass removes:
 
 **Output:** partial `SourceList` files merged by Orchestrator.
 
+**LLM role:** Required for relevance filtering and fact extraction. A Source Hunter should not blindly dump search results; it should keep only items that match the SearchPlan, extract key facts, and explain source confidence.
+
 ### Source QA Agent
 
 **Purpose:** Clean, rank, and challenge evidence.
@@ -346,6 +379,8 @@ The final pass removes:
 - Ask user when a high-impact metric conflicts.
 
 **Output:** `SourceQANotes` and clean `SourceList`.
+
+**LLM role:** Mandatory. QA requires judgment: whether two numbers are actually comparable, whether a source is stale for the decision, and whether social evidence can support only sentiment rather than fact.
 
 ### Framework Analyst Agents
 
@@ -362,6 +397,8 @@ Run one analyst per confirmed framework when independent:
 
 **Output:** partial `ClaimGraph` files merged by Orchestrator.
 
+**LLM role:** Mandatory. This is a reasoning node. It must synthesize across sources, identify contradictions, and produce claims that answer the user's decision. It must not copy snippets into framework boxes.
+
 ### Specialist Agents
 
 **Purpose:** Add domain-specific analysis that a generic analyst would miss.
@@ -374,6 +411,8 @@ Run one analyst per confirmed framework when independent:
 | Competitor Specialist | 竞品功能、定位、渠道、融资、团队 | competitor-profiling, competitors, directory-submissions |
 
 **Output:** additional claims and notes appended to `ClaimGraph`.
+
+**LLM role:** Mandatory. Specialist agents use domain skills as inputs, then interpret what the outputs mean for the decision. For example, `company-valuation` can produce valuation scenarios, but the Finance Specialist explains which assumptions drive the conclusion and how reliable they are.
 
 ### Citation Auditor Agent
 
@@ -388,6 +427,8 @@ Run one analyst per confirmed framework when independent:
 
 **Output:** `CitationAudit`.
 
+**LLM role:** Mandatory. Citation audit is semantic, not only mechanical. It must compare the sentence to the cited evidence and decide whether the source supports the exact claim, a weaker claim, or no claim.
+
 ### Report Writer Agent
 
 **Purpose:** Write the decision-oriented report from the approved claim graph.
@@ -400,6 +441,8 @@ Run one analyst per confirmed framework when independent:
 - Include risk and uncertainty.
 
 **Output:** `ReportDraft`.
+
+**LLM role:** Mandatory. Report writing is not template filling. The writer chooses a report shape based on reader, decision, evidence strength, and urgency.
 
 ### Humanizer Editor Agent
 
@@ -418,6 +461,142 @@ Run one analyst per confirmed framework when independent:
 - Preserve citations, numbers, caveats, and factual scope.
 
 **Output:** `FinalReport`.
+
+**LLM role:** Mandatory. Humanizer is an editorial LLM pass. It removes AI-like writing patterns while preserving citations, evidence strength, numbers, and risk caveats.
+
+## Report Template Strategy
+
+The report template is not finalized yet. High-quality output requires choosing the right template for the business context before implementation.
+
+The system should support several report families. The AuditCard must show the proposed report family and let the user adjust it.
+
+### Template Family A: Executive Decision Memo
+
+**Best for:** 百度地图市场组/产品策略需要快速决定是否跟进、反制、观察。
+
+**Shape:**
+
+```markdown
+# [主题] 决策简报
+
+## 先给结论
+[1-3 句话，直接回答该不该做、先做什么、不做什么]
+
+## 为什么现在要看
+[事件/竞品动作/窗口期，带来源]
+
+## 证据
+[按证据强弱组织，不机械按 3 点]
+
+## 对百度地图的含义
+[机会、威胁、可利用的差异点]
+
+## 建议动作
+[P0/P1/P2；负责人类型；验证方式]
+
+## 风险和未证实项
+[不能确定的地方]
+
+## 参考文献
+```
+
+**Quality bar:** Short, sharp, action-oriented. Avoid academic framework exposition unless it changes the decision.
+
+### Template Family B: Deep Research Report
+
+**Best for:** 行业研究、重要竞品专题、领导汇报、需要完整证据链的报告。
+
+**Shape:**
+
+```markdown
+# [主题] 深度调研报告
+
+## 核心判断
+## 研究范围和方法
+## 信息源覆盖
+## 框架分析章节
+## 关键反证
+## 风险与不确定性
+## 可跟踪指标
+## 参考文献
+```
+
+**Quality bar:** Evidence-first and inspectable. Framework chapters can be longer, but every section must earn its place.
+
+### Template Family C: Competitive Battlecard
+
+**Best for:** 高德/腾讯/Google Maps 等竞品功能、定位、渠道、用户反馈跟踪。
+
+**Shape:**
+
+```markdown
+# [竞品] Battlecard
+
+## 这次变化是什么
+## 竞品意图判断
+## 功能/体验/渠道对比
+## 用户反馈和情绪
+## 我方风险
+## 我方可打的点
+## 下一步监控
+## 来源
+```
+
+**Quality bar:** Useful to product/marketing teams in a meeting. Tables are welcome, but not as a substitute for judgment.
+
+### Template Family D: Finance/Investment Note
+
+**Best for:** 财报、估值、经营质量、风险评估。
+
+**Shape:**
+
+```markdown
+# [公司] 研究笔记
+
+## 结论和评级口径
+## 关键数字
+## 驱动因素
+## 预期差
+## 估值/情景
+## 风险
+## 不构成投资建议声明
+## 参考文献
+```
+
+**Quality bar:** Numeric precision over rhetorical polish. Every number needs period, currency, and source.
+
+### Template Family E: Growth / GTM Plan
+
+**Best for:** 增长方向、营销打法、渠道策略、活动方案。
+
+**Shape:**
+
+```markdown
+# [主题] 增长方案
+
+## 目标和约束
+## 用户/场景洞察
+## 增长杠杆
+## 推荐打法
+## 实验设计
+## 指标和埋点
+## 风险
+## 来源
+```
+
+**Quality bar:** Must connect insight -> action -> metric. No generic "加强宣传/提升体验" without concrete mechanism.
+
+### Template Selection Rules
+
+| User intent | Default report family |
+|---|---|
+| "给市场组一个方案", "有什么启示", "要不要跟进" | Executive Decision Memo |
+| "完整调研", "系统分析", "行业格局" | Deep Research Report |
+| "竞品对比", "上新了什么功能", "谁更强" | Competitive Battlecard |
+| "财报", "估值", "值不值得投", "风险" | Finance/Investment Note |
+| "增长", "获客", "留存", "GTM", "活动方案" | Growth / GTM Plan |
+
+The Report Writer Agent can combine families, but it must name the chosen family in the AuditCard. Example: "Competitive Battlecard + Executive Decision Memo" for a competitor update that also needs actions.
 
 ## State Storage
 
