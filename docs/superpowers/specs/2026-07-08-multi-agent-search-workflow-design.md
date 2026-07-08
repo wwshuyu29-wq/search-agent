@@ -365,6 +365,233 @@ The final pass removes:
 
 **LLM role:** Required for relevance filtering and fact extraction. A Source Hunter should not blindly dump search results; it should keep only items that match the SearchPlan, extract key facts, and explain source confidence.
 
+## RSS Source Organization Logic
+
+RSS is not a single source type. In this workflow it is a **news-signal layer** used to catch recent market, industry, financial, and technology coverage that search engines or official pages may miss. It should rarely be the only evidence for a high-confidence factual claim.
+
+### Source Pool
+
+The source pool lives in:
+
+```text
+lib/finance-rss-reader/references/rss_sources.json
+```
+
+Current pool shape:
+
+| Dimension | Current shape | Meaning |
+|---|---:|---|
+| Total configured sources | 67 | Production default scans the full pool |
+| Region | 19 English / 48 Chinese | English for global finance/tech; Chinese for domestic market and industry context |
+| Fetch method | 36 native RSS / 29 Firecrawl / 2 news-aggregator | Choose the most reliable access method per source |
+| Source classes | media, analysis, industry research, deep articles, finance media, tech finance, AI media | Used for confidence and report coverage notes |
+
+Each source config can contain:
+
+```json
+{
+  "name": "Reuters Business",
+  "url": "https://www.reuters.com/business/feed/",
+  "region": "en",
+  "type": "媒体",
+  "fetcher": "rss",
+  "note": "全球公司财报/并购/宏观"
+}
+```
+
+Optional fields:
+
+- `query_template`: used when `fetcher=firecrawl`, for sources without stable RSS.
+- `newsagg_source`: used when `fetcher=newsagg`, for direct API/hot-list sources.
+- `note`: explains why the source is included and what it is good for.
+
+### Why Sources Are Organized This Way
+
+The pool is intentionally mixed because different research questions need different evidence:
+
+| Source family | Examples | Best for | Default confidence |
+|---|---|---|---|
+| Global business/markets media | Reuters, Bloomberg, FT, WSJ, CNBC | company news, markets, macro, earnings context | medium |
+| Investment analysis | Morningstar, Barron's, Motley Fool, SeekingAlpha by ticker | analyst framing, investor debate, valuation narrative | medium |
+| Tech/startup media | TechCrunch, VentureBeat, 36氪 | product, funding, tech company moves | medium |
+| Industry research | Gartner, IDC, McKinsey, 艾瑞, 易观 | market size, trend, industry framing | medium; high only if methodology is clear |
+| Chinese finance media | 东方财富, 财新, 证券时报, 21财经 | A/H股, China market, regulation, domestic sentiment | medium |
+| Deep Chinese sources | 晚点, 虎嗅, 极客公园, 36氪深度 | product strategy, interviews, long-form explanations | medium |
+| AI/technology sources | 机器之心, 量子位, InfoQ | AI/tech stack and product trend evidence | medium |
+| Hot-list/news aggregator | 华尔街见闻, 36氪快讯 | fast event detection | low/medium until verified |
+
+RSS sources are not ranked only by brand. The same publisher can be high-value for one question and weak for another. Example: Bloomberg Markets is useful for market reaction, but not enough to prove a product feature shipped; an app store or official changelog is needed for that.
+
+### Fetch Method Logic
+
+The `fetcher` field decides how the source is collected:
+
+| fetcher | Used when | Logic |
+|---|---|---|
+| `rss` | Source has stable RSS/Atom feed | Fetch XML, parse title/link/date/summary locally |
+| `firecrawl` | Source has no stable RSS, is JS-heavy, or needs site search | Run `scripts/firecrawl_search.py` with `query_template` |
+| `newsagg` | Source has a faster direct API via news-aggregator-skill | Call `fetch_news.py`, then let RSS relevance scoring filter results |
+
+Selection rule:
+
+```text
+native RSS if stable
+  -> news-aggregator direct API if faster/more reliable
+  -> Firecrawl targeted search if no usable feed
+  -> skip with warning if all access paths fail
+```
+
+### Runtime Flow
+
+RSS/News Hunter receives:
+
+```json
+{
+  "keywords": ["百度地图", "Baidu Maps", "地图导航"],
+  "ticker": "BIDU",
+  "days": 14,
+  "min_score": 0.4
+}
+```
+
+Then:
+
+1. Load the 67-source config.
+2. Append a dynamic SeekingAlpha ticker feed when `ticker` is present.
+3. Fetch all sources concurrently with `ThreadPoolExecutor(max_workers=8)`.
+4. Parse each item into a normalized shape:
+
+```json
+{
+  "title": "...",
+  "url": "...",
+  "published": "...",
+  "summary": "...",
+  "source": "Reuters Business",
+  "region": "en",
+  "source_type": "媒体",
+  "fetcher": "rss",
+  "relevance_score": 0.72
+}
+```
+
+5. Apply date filter with `days`.
+6. Score relevance from title and summary keyword hits.
+7. Keep items with `relevance_score >= min_score`.
+8. Sort by `relevance_score` descending.
+9. Full-text fetch only the highest-relevance items, usually `score >= 0.6`, max 5 per run.
+
+### Relevance Score Logic
+
+The current deterministic score is a candidate filter, not the final LLM judgment.
+
+Scoring logic:
+
+- Title hit gives the largest boost.
+- Multiple title hits add more weight.
+- Summary hit adds smaller weight.
+- More unique keyword hits increase confidence.
+- Score is capped at 1.0.
+
+Conceptual formula:
+
+```text
+score =
+  title_hit_boost
+  + additional_title_hit_boost
+  + summary_hit_boost
+  + additional_summary_hit_boost
+  + unique_keyword_coverage_boost
+```
+
+Why this matters:
+
+- A title match is more likely to be about the topic.
+- Summary-only matches can be useful but are noisier.
+- Chinese multi-keyword queries should not be penalized too hard, so one strong title hit can still pass.
+
+LLM responsibility after scoring:
+
+- Drop false positives that passed keyword scoring.
+- Keep semantically relevant items that score modestly but clearly match the SearchPlan.
+- Explain why an item is included if it is used in ClaimGraph.
+
+### RSS Source Confidence Rules
+
+RSS confidence starts from source type and evidence role:
+
+| Case | Confidence | Reason |
+|---|---|---|
+| Official source discovered through RSS or Firecrawl | high | Original publisher owns the claim |
+| Major media reporting a factual event | medium | Useful, but secondary unless linked to original |
+| Analysis/opinion article | medium | Good for interpretation, not primary fact |
+| Hot-list/brief/news flash | low/medium | Fast signal; needs confirmation |
+| Social or community item routed through news aggregation | low | Sentiment/signal only |
+| Paywalled summary only | low/medium with note | Summary may omit nuance |
+
+RSS evidence can support:
+
+- "This topic is being covered recently."
+- "Media/analysts are framing it this way."
+- "There is a market reaction or sentiment signal."
+- "A secondary source reports X, pending official confirmation."
+
+RSS evidence should not alone support:
+
+- official financial results
+- exact product launch claims
+- regulatory facts
+- market size numbers
+- valuation conclusions
+
+Those require official filings, company pages, data APIs, or clearly cited research methodology.
+
+### Source ID and Report Integration
+
+In workflow mode, RSS items become:
+
+```yaml
+- source_id: S_RSS001
+  title: "..."
+  publisher: "Reuters"
+  source_type: "媒体"
+  publish_date: "2026-07-08"
+  url_or_path: "https://..."
+  confidence: medium
+  key_facts:
+    - "..."
+  notes: "RSS item; full_text_fetched=true; relevance_score=0.72"
+```
+
+`S_RSS###` items enter the same Source QA process as all other sources.
+
+Source QA must:
+
+- deduplicate RSS items against Firecrawl/realtime-search results by canonical URL;
+- prefer official or fuller versions of the same story;
+- mark paywalled or summary-only items;
+- downgrade claims if RSS is the only support;
+- group RSS hits by theme for report coverage notes.
+
+### RSS Coverage Notes in Reports
+
+Reports should not dump RSS lists. They should summarize coverage:
+
+```markdown
+## 信息源覆盖
+
+RSS/快讯层共命中 12 条，其中 5 条来自中文财经媒体，4 条来自英文市场媒体，3 条来自产业/科技媒体。RSS 主要用于识别近期讨论热度和媒体框架；核心事实仍以官方来源和全文抓取材料为准。
+```
+
+For high-quality output, the Report Writer should use RSS as:
+
+- recency signal
+- market narrative signal
+- cross-check cue
+- source discovery path
+
+not as the backbone of the report.
+
 ### Source QA Agent
 
 **Purpose:** Clean, rank, and challenge evidence.
