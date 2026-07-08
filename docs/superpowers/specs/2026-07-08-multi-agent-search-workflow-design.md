@@ -485,7 +485,38 @@ Then:
 
 The current deterministic score is a candidate filter, not the final LLM judgment.
 
-Scoring logic:
+The actual code lives in `lib/finance-rss-reader/scripts/rss_fetch.py::relevance_score`.
+
+Scoring inputs:
+
+- `title`: lowercased RSS title.
+- `summary`: lowercased RSS summary/description, capped earlier during parsing.
+- `keywords`: comma-separated query terms from SearchPlan, lowercased and stripped.
+
+If no keyword appears in either title or summary, score is `0.0`.
+
+Exact scoring formula:
+
+```text
+title_hits = keywords appearing as substrings in title
+summary_hits = keywords appearing as substrings in summary
+unique_hits = unique(title_hits + summary_hits)
+
+score = 0
+
+if title_hits:
+  score += 0.42
+  score += min(len(title_hits) - 1, 3) * 0.12
+
+if summary_hits:
+  score += 0.18
+  score += min(len(summary_hits) - 1, 3) * 0.06
+
+score += min(len(unique_hits) / len(keywords), 1.0) * 0.16
+score = min(score, 1.0)
+```
+
+Interpretation:
 
 - Title hit gives the largest boost.
 - Multiple title hits add more weight.
@@ -493,22 +524,44 @@ Scoring logic:
 - More unique keyword hits increase confidence.
 - Score is capped at 1.0.
 
-Conceptual formula:
+Examples:
+
+| Case | Example | Score behavior | Meaning |
+|---|---|---|---|
+| No keyword hit | title and summary do not contain any keyword | `0.0` | Drop |
+| One title hit, four keywords | title contains `豆包`; keywords are `豆包导航, 豆包, AI导航, 一键打车` | about `0.46` | Candidate; not strong enough for automatic full-text fetch |
+| Two title hits, four keywords | title contains `豆包` and `一键打车` | about `0.62` | Strong candidate; eligible for full-text fetch |
+| One title hit + one summary hit, four keywords | title contains `豆包`, summary contains `一键打车` | about `0.68` | Strong candidate; eligible for full-text fetch |
+| One keyword list, title + summary hit | keywords only `BIDU`; title and summary contain `BIDU` | about `0.76` | Strong direct match |
+
+Thresholds:
 
 ```text
-score =
-  title_hit_boost
-  + additional_title_hit_boost
-  + summary_hit_boost
-  + additional_summary_hit_boost
-  + unique_keyword_coverage_boost
+score >= min_score      -> keep as RSS candidate
+score >= 0.6            -> eligible for full-text fetch
+top 5 by score          -> full-text fetch cap
 ```
 
-Why this matters:
+Current workflow convention:
+
+- `min_score` is usually `0.4` for keeping RSS candidates.
+- `0.6` is the stronger threshold for expensive full-text fetch.
+- `0.6` does not mean "claim is true." It means "this item is relevant enough to spend fetch/context budget on."
+
+Why this matters operationally:
 
 - A title match is more likely to be about the topic.
 - Summary-only matches can be useful but are noisier.
 - Chinese multi-keyword queries should not be penalized too hard, so one strong title hit can still pass.
+
+Known limitations:
+
+- It is exact substring matching, not semantic matching.
+- It does not understand synonyms unless Search Planner added them as keywords.
+- It does not know whether the article is positive, negative, factual, or opinion.
+- It does not know whether the source is primary or secondary.
+- It can miss relevant articles with different wording.
+- It can keep false positives when a keyword is ambiguous.
 
 LLM responsibility after scoring:
 
