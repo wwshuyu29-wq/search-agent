@@ -414,6 +414,163 @@ Run one analyst per confirmed framework when independent:
 
 **LLM role:** Mandatory. Specialist agents use domain skills as inputs, then interpret what the outputs mean for the decision. For example, `company-valuation` can produce valuation scenarios, but the Finance Specialist explains which assumptions drive the conclusion and how reliable they are.
 
+## Finance and Marketing Skill Chains
+
+Financial and marketing skills must be chained through specialist agents, not called as isolated helpers. Each chain has four stages:
+
+```text
+LLM frames specialist question
+  -> specialist skill/tool produces method output
+  -> LLM interprets output against the user's decision
+  -> interpreted result becomes source-backed ClaimGraph entries
+```
+
+### Finance Specialist Chain
+
+**When used:** public company research, financial performance, valuation, investment judgment, risk, liquidity, sentiment, single-number finance lookup.
+
+**Core logic:**
+
+1. **Classify finance need with LLM.**
+   - Is the user asking for a single number, a financial health read, valuation, earnings reaction, risk, or investment-style synthesis?
+   - If single number, short-circuit after data retrieval.
+   - If synthesis, continue into Step 1/2 as a full finance chain.
+
+2. **Choose data skills.**
+
+| Finance question | Primary skill | Supporting skill | Output artifact |
+|---|---|---|---|
+| Latest price, market cap, basic financial number | `yfinance-data` | `funda-data` if yfinance unavailable or richer data needed | `FIN###` source row |
+| Earnings recap / "Q1 怎么样" | `earnings-recap` | `funda-data`, RSS, transcript search | earnings claim set |
+| Earnings preview / expectations | `earnings-preview` | `estimate-analysis`, `funda-data` | expectations and surprise-risk claims |
+| Fair value / overvalued / undervalued | `company-valuation` | `yfinance-data`, `funda-data`, peer search | valuation scenarios |
+| Estimate revisions | `estimate-analysis` | RSS, transcript search | revision-trend claims |
+| Liquidity / tradability risk | `stock-liquidity` | market data | liquidity-risk claims |
+| Correlation / hedge / factor exposure | `stock-correlation` | sector peer data | correlation claims |
+| Options strategy | `options-payoff` | `tradingview-reader` | payoff/risk chart claims |
+| Market sentiment | `finance-sentiment` | Reddit/X/news RSS | sentiment claims, confidence low/medium |
+
+3. **LLM interprets method output.**
+   - The skill output is not the final conclusion.
+   - The Finance Specialist LLM must explain which assumptions matter, what changed, what is comparable, and where confidence is weak.
+   - Every number must include period, currency, unit, and source.
+
+4. **Write ClaimGraph entries.**
+
+Example:
+
+```json
+{
+  "claim_id": "FIN_CL001",
+  "dimension": "估值",
+  "claim_type": "judgment",
+  "text": "DCF 和相对估值给出的区间分歧较大，主要因为终端增长率和同行倍数假设敏感；因此估值结论应以情景区间呈现，而不是单点价格。",
+  "source_ids": ["FIN001", "FIN002"],
+  "method": "company-valuation",
+  "assumptions": ["WACC", "terminal growth", "peer median EV/EBITDA"],
+  "confidence": "medium"
+}
+```
+
+**Hard constraints:**
+
+- Never let valuation skill output become investment advice without LLM risk framing and disclaimer.
+- Never compare financial numbers without checking period and currency.
+- Never cite market sentiment as a fact about company performance.
+- If data providers disagree, Source QA must flag the conflict before analysis proceeds.
+
+### Marketing Specialist Chain
+
+**When used:** growth, GTM, positioning, STP, 4P, AARRR, user research, brand, campaign planning, channel strategy, competitor positioning.
+
+**Core logic:**
+
+1. **Classify marketing need with LLM.**
+   - Is the user asking for ideas, a full plan, positioning, pricing, launch, channel analysis, customer insight, or competitor intelligence?
+   - If fuzzy, use `marketing-ideas` before framework selection.
+   - If plan-shaped, use `marketing-plan` to structure report family and execution sections.
+
+2. **Choose marketing skills.**
+
+| Marketing question | Primary skill | Supporting skill | Output artifact |
+|---|---|---|---|
+| "帮我想想方向/灵感" | `marketing-ideas` | `marketing-psychology` if persuasion angle needed | idea candidates |
+| Full marketing/GTM/growth plan | `marketing-plan` | `product-marketing`, `pricing`, `analytics` | plan skeleton and AARRR map |
+| Positioning / ICP / messaging | `product-marketing` | `customer-research`, `copywriting` | positioning claims |
+| Customer pain / JTBD / VOC | `customer-research` | UGC Source Hunter, `analytics` | VOC/JTBD claim set |
+| Competitor profile | `competitor-profiling` | `competitors`, `directory-submissions` | competitor dossier claims |
+| Pricing / packaging | `pricing` | `offers`, `paywalls` | pricing hypothesis claims |
+| Acquisition / SEO | `seo-audit`, `ai-seo`, `programmatic-seo`, `schema` | `content-strategy` | acquisition claims |
+| Activation | `signup`, `onboarding`, `cro` | analytics source | activation bottleneck claims |
+| Retention | `churn-prevention`, `emails`, `sms` | customer-research | retention claims |
+| Referral/community | `referrals`, `community-marketing`, `co-marketing` | social/UGC sources | referral claims |
+| Ads / campaign creative | `ads`, `ad-creative`, `copywriting` | `copy-editing` | creative direction claims |
+
+3. **LLM interprets marketing skill output.**
+   - Marketing skills often generate many tactics. The Marketing Specialist LLM must prioritize based on the user's audience, team capacity, budget, funnel stage, and evidence.
+   - It must separate "idea", "hypothesis", "validated insight", and "recommended action".
+   - It must connect every recommended action to a metric.
+
+4. **Write ClaimGraph entries.**
+
+Example:
+
+```json
+{
+  "claim_id": "MKT_CL001",
+  "dimension": "增长杠杆",
+  "claim_type": "judgment",
+  "text": "暑期增长不应先从大规模品牌投放切入，而应先验证亲子/旅游场景的自然语言路线规划入口，因为该动作同时服务 Activation 和 Retention。",
+  "source_ids": ["UGC002", "MKT001"],
+  "method": "marketing-ideas + customer-research",
+  "metric_link": ["first-route-created rate", "7-day repeat navigation rate"],
+  "confidence": "medium"
+}
+```
+
+**Hard constraints:**
+
+- Never output generic actions like "加强宣传" or "提升体验" without mechanism, target segment, channel, and metric.
+- Never treat UGC volume as market size.
+- Never turn `marketing-plan` into a 13-section dump when the user asked for a concise market-team memo.
+- Every recommendation must map to a funnel stage or strategic objective.
+
+### Finance x Marketing Mixed Chain
+
+Many real questions cross both domains. Examples: "小米汽车品牌力对股价的影响", "Temu 增长故事值不值得投", "SaaS IPO 前增长质量".
+
+**Flow:**
+
+1. Intent Router detects mixed finance x marketing framing.
+2. AuditCard asks for lens: investor, operator, or new-business evaluation.
+3. Finance Specialist produces financial baseline: growth, margin, valuation, estimate/risk.
+4. Marketing/User/Competitor Specialists produce market mechanism: brand, acquisition, retention, pricing, competitive moat.
+5. Framework Analyst connects the causal chain:
+
+```text
+marketing signal -> user behavior -> unit economics -> financial metric -> valuation/risk implication
+```
+
+Example:
+
+```json
+{
+  "claim_id": "MIX_CL001",
+  "dimension": "品牌到财务传导",
+  "claim_type": "judgment",
+  "text": "品牌热度只有在带来可复购订单或更低获客成本时才支撑估值上修；如果只停留在声量，财务传导证据不足。",
+  "source_ids": ["MKT003", "FIN002"],
+  "causal_chain": ["brand attention", "conversion/CAC", "gross profit", "valuation multiple"],
+  "confidence": "medium"
+}
+```
+
+**Hard constraints:**
+
+- No direct jump from "品牌声量高" to "股价应上涨".
+- No direct jump from "营收增长" to "营销有效" without channel/user evidence.
+- If the causal chain has a missing link, label it as an assumption and propose the metric needed to verify it.
+
 ### Citation Auditor Agent
 
 **Purpose:** Keep the report honest.
