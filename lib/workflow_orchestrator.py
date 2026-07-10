@@ -295,6 +295,14 @@ class WorkflowOrchestrator:
         if artifact_name == "ClaimGraph":
             claims = artifact.get("claims", []) if isinstance(artifact, dict) else []
             return self._missing_row_fields("claims", claims, required_fields)
+        if artifact_name == "ApprovedClaimGraph":
+            if not isinstance(artifact, dict):
+                return list(required_fields)
+            missing = [field for field in required_fields if field not in artifact]
+            claims = artifact.get("claims", [])
+            if not isinstance(claims, list) or not claims:
+                missing.append("claims")
+            return missing
 
         if not isinstance(artifact, dict):
             return list(required_fields)

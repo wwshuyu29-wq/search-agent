@@ -9,7 +9,7 @@ future orchestrators share the same mental model.
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 NODE_CONTRACTS: List[Dict[str, Any]] = [
@@ -294,34 +294,74 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "A source that mentions a topic does not automatically support the sentence.",
         ],
     },
+
+    {
+        "id": "outline_architect",
+        "name": "Outline Architect Agent",
+        "input_artifact": "ApprovedClaimGraph + confirmed reader/decision/output context",
+        "llm_judgment": "Design three materially different outline logics, recommend one with reasons, and map every section to evidence claims and a word budget.",
+        "tool_or_skill_use": ["brainstorming", "writing-plans", "content-strategy"],
+        "output_artifact": "OutlinePlan",
+        "quality_gate": "Exactly three distinct candidates are usable, evidence-backed, reader-fit, and explicit about tradeoffs.",
+        "hard_constraints": [
+            "Do not generate three cosmetic variants of the same outline.",
+            "Recommend but never approve on the user's behalf.",
+            "No candidate section may lack a purpose or evidence claim slot.",
+        ],
+    },
+    {
+        "id": "human_outline_gate",
+        "name": "Human Outline Approval Gate",
+        "input_artifact": "OutlinePlan",
+        "llm_judgment": "Present three candidates, mark the recommendation and tradeoffs, then faithfully capture the user's selection, combination, or edits without approving for them.",
+        "tool_or_skill_use": ["structured user choice capture"],
+        "output_artifact": "ApprovedOutline",
+        "quality_gate": "The user explicitly confirms one final outline structure.",
+        "hard_constraints": [
+            "Never infer approval from silence.",
+            "Allow selecting the recommendation, another candidate, or a user-edited combination.",
+            "Do not proceed to Report Writer until approved_by_user=true.",
+        ],
+    },
     {
         "id": "report_writer",
         "name": "Report Writer Agent",
-        "input_artifact": "ApprovedClaimGraph + CitationAudit + CleanSourceList",
-        "llm_judgment": "Choose a reader-appropriate report family and compress claims into a useful decision document.",
-        "tool_or_skill_use": [
-            "report family selector",
-            "reference table renderer",
-            "optional generative-ui for finance/visual analysis",
-        ],
+        "input_artifact": "ApprovedOutline + ApprovedClaimGraph + confirmed reader/decision context",
+        "llm_judgment": "Develop deep prose within the user-approved section sequence, purpose, evidence slots, and word budgets.",
+        "tool_or_skill_use": ["writing-plans", "copywriting", "content-strategy"],
         "output_artifact": "ReportDraft",
-        "quality_gate": "The draft answers the user decision, preserves citations, and states uncertainty.",
+        "quality_gate": "Every approved section is developed in order, evidence-linked, reader-fit, and uncertainty explicit.",
         "hard_constraints": [
-            "Do not force a visible rule-of-three or one-size-fits-all pyramid template.",
-            "The conclusion-first logic must be supported by the audited claim graph.",
+            "Do not write before ApprovedOutline exists.",
+            "Do not add, remove, rename, or reorder top-level sections without user re-approval.",
+            "Do not introduce claims outside ApprovedClaimGraph.",
+            "Reference appendix remains mandatory.",
+        ],
+    },
+    {
+        "id": "outline_compliance_auditor",
+        "name": "Outline Compliance Auditor Agent",
+        "input_artifact": "ApprovedOutline + ReportDraft",
+        "llm_judgment": "Check section order, purpose completion, evidence-slot use, word-budget balance, and unauthorized structural drift.",
+        "tool_or_skill_use": ["copy-editing", "verification-before-completion"],
+        "output_artifact": "OutlineComplianceReview",
+        "quality_gate": "All approved sections are present in order and no unapproved top-level section exists.",
+        "hard_constraints": [
+            "Block completion on structural drift.",
+            "Do not rewrite the report; return actionable findings to Report Writer.",
         ],
     },
     {
         "id": "humanizer_editor",
         "name": "Humanizer Editor Agent",
-        "input_artifact": "ReportDraft + CleanSourceList + reader profile",
-        "llm_judgment": "Remove AI-like phrasing while preserving evidence, numbers, citations, and risk boundaries.",
+        "input_artifact": "ReportDraft + ApprovedOutline + OutlineComplianceReview + ApprovedClaimGraph",
+        "llm_judgment": "Remove AI-like phrasing while preserving the approved structure, evidence, numbers, citations, and risk boundaries.",
         "tool_or_skill_use": ["humanizer", "humanizer-zh", "copy-editing"],
-        "output_artifact": "FinalReport + HumanizerChangeLog",
-        "quality_gate": "Final text sounds like a professional internal research note, not a prompt template.",
+        "output_artifact": "HumanizerChangeLog + FinalReport",
+        "quality_gate": "Expression improves without structural or evidentiary drift.",
         "hard_constraints": [
-            "Do not change facts, numbers, citations, or confidence levels.",
-            "Do not add personality or unsupported certainty.",
+            "Do not add, remove, rename, or reorder approved top-level sections.",
+            "Do not change facts, numbers, citations, assumptions, or risk levels.",
         ],
     },
     {
@@ -436,13 +476,31 @@ NODE_BOUNDARIES: Dict[str, Dict[str, Any]] = {
         "responsibility_boundary": "Only checks claim-source support before report writing.",
         "may_do": ["Verify source_ids", "downgrade claims", "block unsupported statements"],
         "must_not_do": ["Add new claims", "rewrite strategy beyond support", "accept topic-only citations"],
-        "handoff_to": "Report Writer after CitationAudit passes.",
+        "handoff_to": "Outline Architect after CitationAudit passes.",
+    },
+    "outline_architect": {
+        "responsibility_boundary": "Only designs three distinct evidence-backed outline candidates and recommends one.",
+        "may_do": ["Design outline logic", "map claim slots", "allocate word budgets", "explain tradeoffs"],
+        "must_not_do": ["Write report prose", "approve for the user", "offer cosmetic variants"],
+        "handoff_to": "Human Outline Approval Gate.",
+    },
+    "human_outline_gate": {
+        "responsibility_boundary": "Only captures the user's explicit outline selection, combination, or edits.",
+        "may_do": ["Present candidates", "record edits", "create ApprovedOutline after explicit approval"],
+        "must_not_do": ["Infer approval", "change the user's structure", "start report prose"],
+        "handoff_to": "Report Writer after approved_by_user=true.",
     },
     "report_writer": {
-        "responsibility_boundary": "Only compresses approved claims into the selected reader-facing report family.",
-        "may_do": ["Select report family", "write conclusion-first draft", "render references", "state risks"],
-        "must_not_do": ["Add uncited claims", "force a fixed template", "hide uncertainty"],
-        "handoff_to": "Humanizer Editor.",
+        "responsibility_boundary": "Only develops prose inside the exact ApprovedOutline structure.",
+        "may_do": ["Develop sections", "use approved claims", "render references", "state evidence gaps"],
+        "must_not_do": ["Add uncited claims", "change top-level structure", "force conclusion-first logic"],
+        "handoff_to": "Outline Compliance Auditor.",
+    },
+    "outline_compliance_auditor": {
+        "responsibility_boundary": "Only checks ReportDraft against ApprovedOutline before Humanizer.",
+        "may_do": ["Check section order", "check purposes", "check evidence slots", "block drift"],
+        "must_not_do": ["Rewrite prose", "approve structural drift", "alter the outline"],
+        "handoff_to": "Humanizer Editor after status=passed.",
     },
     "humanizer_editor": {
         "responsibility_boundary": "Only edits expression and removes AI-like phrasing.",
@@ -763,17 +821,33 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
     },
     "ApprovedClaimGraph": {
         "producer_nodes": ["citation_auditor"],
-        "consumer_nodes": ["report_writer"],
-        "required_fields": [
-            "approved_claim_ids",
-            "claims",
-            "blocked_claim_ids",
-            "citation_audit_status",
-        ],
-        "quality_rules": [
-            "Only supported or explicitly allowed partially supported claims remain.",
-            "Blocked claims are unavailable to Report Writer.",
-        ],
+        "consumer_nodes": ["outline_architect", "report_writer"],
+        "required_fields": ["approved_claim_ids", "claims"],
+        "quality_rules": ["Only audit_status=passed claims are report-ready", "At least one explicit source_id per factual claim"],
+    },
+    "OutlinePlan": {
+        "producer_nodes": ["outline_architect"],
+        "consumer_nodes": ["human_outline_gate"],
+        "required_fields": ["candidates", "recommended_outline_id", "recommendation_reason"],
+        "quality_rules": ["Exactly three materially distinct candidates", "Each candidate declares reader, writing_logic, sections, evidence slots, and word budgets"],
+    },
+    "ApprovedOutline": {
+        "producer_nodes": ["human_outline_gate"],
+        "consumer_nodes": ["report_writer", "outline_compliance_auditor"],
+        "required_fields": ["selected_outline_id", "approved_by_user", "report_family", "title", "target_reader", "writing_logic", "sections"],
+        "quality_rules": ["approved_by_user must be true", "Section order and headings become immutable until re-approved", "Every section has purpose and required_claim_ids"],
+    },
+    "ReportDraft": {
+        "producer_nodes": ["report_writer"],
+        "consumer_nodes": ["outline_compliance_auditor", "humanizer_editor"],
+        "required_fields": ["report_family", "approved_outline_id", "reader", "decision", "sections", "references"],
+        "quality_rules": ["Reader-fit structure", "Top-level sections exactly inherit ApprovedOutline", "Every factual section maps back to ApprovedClaimGraph", "References remain clickable"],
+    },
+    "OutlineComplianceReview": {
+        "producer_nodes": ["outline_compliance_auditor"],
+        "consumer_nodes": ["report_writer", "humanizer_editor"],
+        "required_fields": ["status", "missing_sections", "unexpected_sections", "order_matches", "purpose_gaps", "evidence_gaps"],
+        "quality_rules": ["status=passed before Humanizer", "Structural drift blocks completion"],
     },
     "ReportDraft": {
         "producer_nodes": ["report_writer"],
@@ -940,14 +1014,58 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "halts_for_user": False,
     },
     {
+        "id": "step3_outline_candidates",
+        "step": "T4",
+        "nodes": ["outline_architect"],
+        "input_artifacts": ["ApprovedClaimGraph", "IntentBrief"],
+        "output_artifacts": ["OutlinePlan"],
+        "parallel": False,
+        "gate": "three_outline_candidates_ready",
+        "gate_type": "automatic",
+        "halts_for_user": False,
+    },
+    {
+        "id": "step3_outline_approval",
+        "step": "T5",
+        "nodes": ["human_outline_gate"],
+        "input_artifacts": ["OutlinePlan"],
+        "output_artifacts": ["ApprovedOutline"],
+        "parallel": False,
+        "gate": "outline_approved_by_user",
+        "gate_type": "human_hard_block",
+        "halts_for_user": True,
+    },
+    {
         "id": "step3_report_draft",
-        "step": "Step 3",
+        "step": "T6",
         "nodes": ["report_writer"],
-        "input_artifacts": ["ApprovedClaimGraph", "CitationAudit", "CleanSourceList", "IntentBrief"],
+        "input_artifacts": ["ApprovedOutline", "ApprovedClaimGraph", "IntentBrief"],
         "output_artifacts": ["ReportDraft"],
         "parallel": False,
-        "gate": "report_draft_preserves_citations",
+        "gate": "report_draft_complete",
         "gate_type": "automatic",
+        "halts_for_user": False,
+    },
+    {
+        "id": "step3_outline_compliance",
+        "step": "T7",
+        "nodes": ["outline_compliance_auditor"],
+        "input_artifacts": ["ApprovedOutline", "ReportDraft"],
+        "output_artifacts": ["OutlineComplianceReview"],
+        "parallel": False,
+        "gate": "outline_compliance_passed",
+        "gate_type": "automatic_hard_block",
+        "halts_for_user": False,
+    },
+    {
+        "id": "step3_humanizer",
+        "step": "T7",
+        "nodes": ["humanizer_editor"],
+        "input_artifacts": ["ReportDraft", "ApprovedOutline", "OutlineComplianceReview", "ApprovedClaimGraph"],
+        "output_artifacts": ["HumanizerChangeLog", "FinalReport"],
+        "parallel": False,
+        "gate": "humanizer_integrity_passed",
+        "gate_type": "automatic_hard_block",
         "halts_for_user": False,
     },
     {
@@ -2049,6 +2167,32 @@ SKILL_INVOCATION_REGISTRY: List[Dict[str, Any]] = [
         "artifact_policy": "Block unsupported claims; rewrite or remove claims whose citations do not prove them.",
     },
     {
+        "id": "outline_architect.outline_methods",
+        "node_id": "outline_architect",
+        "skill_or_tool": "brainstorming / writing-plans / content-strategy",
+        "invocation_type": "llm_method",
+        "trigger": "ApprovedClaimGraph and reader/decision context are ready.",
+        "input_artifact": "ApprovedClaimGraph + IntentBrief",
+        "output_artifact": "OutlinePlan",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "Local outline archetypes and planning skills.",
+        "artifact_policy": "Methods shape three candidate outlines but cannot approve one for the user.",
+    },
+    {
+        "id": "human_outline_gate.user_choice",
+        "node_id": "human_outline_gate",
+        "skill_or_tool": "structured user choice capture",
+        "invocation_type": "internal",
+        "trigger": "OutlinePlan is ready and explicit user input is required.",
+        "input_artifact": "OutlinePlan",
+        "output_artifact": "ApprovedOutline",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "Explicit user response.",
+        "artifact_policy": "No report prose before approved_by_user=true.",
+    },
+    {
         "id": "report_writer.report_family",
         "node_id": "report_writer",
         "skill_or_tool": "report family selector + build-report/marketing-plan where applicable",
@@ -2060,6 +2204,19 @@ SKILL_INVOCATION_REGISTRY: List[Dict[str, Any]] = [
         "can_directly_support_claim": False,
         "required_setup": "Local report family definitions and optional data analytics/reporting skills.",
         "artifact_policy": "Report structure can change; facts, source_ids, confidence, and risk boundaries cannot be invented.",
+    },
+    {
+        "id": "outline_compliance_auditor.structure_check",
+        "node_id": "outline_compliance_auditor",
+        "skill_or_tool": "copy-editing / verification-before-completion",
+        "invocation_type": "llm_method",
+        "trigger": "ReportDraft is ready.",
+        "input_artifact": "ApprovedOutline + ReportDraft",
+        "output_artifact": "OutlineComplianceReview",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "ApprovedOutline and structured ReportDraft.",
+        "artifact_policy": "Block any missing, unexpected, or reordered top-level section.",
     },
     {
         "id": "humanizer_editor.humanizer_zh",
@@ -2108,6 +2265,49 @@ RSS_RELEVANCE_CONTRACT = {
         "False positives remain possible and must be filtered by Source Hunter/Source QA.",
     ],
 }
+
+
+OUTLINE_ARCHETYPES: List[Dict[str, Any]] = [
+    {
+        "id": "panoramic_comparison",
+        "name": "全景对比型",
+        "report_family": "competitive_battlecard",
+        "writing_logic": "事实全景 → 维度对比 → 用户反馈 → 差距判断 → 我方行动",
+        "sections": [
+            ("竞品变化全景", "建立时间线和功能事实底座"),
+            ("核心功能与用户任务", "解释功能解决的用户任务和价值"),
+            ("我方与竞品对比", "按统一维度比较能力、体验与节奏"),
+            ("用户反馈与证据分歧", "区分事实、UGC 情绪和证据限制"),
+            ("对我方的启示与行动", "提出有优先级和验证指标的建议"),
+        ],
+    },
+    {
+        "id": "causal_deep_dive",
+        "name": "因果深挖型",
+        "report_family": "deep_research_report",
+        "writing_logic": "现象 → 成因 → 机制 → 影响 → 战略含义",
+        "sections": [
+            ("现象与关键问题", "定义真正需要解释的变化和边界"),
+            ("变化背后的驱动因素", "分析市场、技术、用户和组织成因"),
+            ("核心机制与产品逻辑", "解释功能或策略如何产生价值"),
+            ("影响、限制与不确定性", "分析影响范围、反证和边界条件"),
+            ("战略含义与优先议题", "把因果判断转成我方重点议题"),
+        ],
+    },
+    {
+        "id": "action_decision",
+        "name": "行动决策型",
+        "report_family": "executive_decision_memo",
+        "writing_logic": "决策问题 → 选项 → 取舍 → 行动 → 验证",
+        "sections": [
+            ("需要做出的决策", "明确决策对象、时限和成功标准"),
+            ("可选方案与证据", "列出可行选项及各自证据"),
+            ("推荐方案与取舍", "说明选择、放弃和关键假设"),
+            ("实施条件与风险", "识别资源、依赖、风险和触发条件"),
+            ("下一步行动与验证指标", "给出责任动作、顺序和验证指标"),
+        ],
+    },
+]
 
 
 REPORT_FAMILIES: List[Dict[str, Any]] = [
@@ -2564,6 +2764,136 @@ def get_rss_relevance_contract() -> Dict[str, Any]:
 def get_report_families() -> List[Dict[str, Any]]:
     """Return all supported report families."""
     return deepcopy(REPORT_FAMILIES)
+
+
+def build_outline_candidates(intent_brief: Dict[str, Any], claim_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Build three distinct outline candidates and recommend one without approving it.
+
+    The recommendation is advisory. The selected structure becomes executable only
+    after :func:`approve_outline` records explicit user approval.
+    """
+    brief = intent_brief or {}
+    claims = list(claim_ids or ["CLAIM_SLOT"])
+    subject = brief.get("subject") or brief.get("research_topic") or "调研主题"
+    audience = brief.get("audience") or brief.get("target_reader") or "业务决策者"
+    decision_text = " ".join(
+        str(brief.get(key, ""))
+        for key in ("user_decision", "output_shape", "research_goal", "intent")
+    ).lower()
+    recommended_family = recommend_report_family(brief)["id"]
+    preferred_by_family = {
+        "competitive_battlecard": "panoramic_comparison",
+        "deep_research_report": "causal_deep_dive",
+        "executive_decision_memo": "action_decision",
+        "growth_gtm_plan": "action_decision",
+        "finance_investment_note": "causal_deep_dive",
+        "evidence_brief": "panoramic_comparison",
+    }
+    recommended_id = preferred_by_family.get(recommended_family, "causal_deep_dive")
+    if any(token in decision_text for token in ("跟进", "行动", "决策", "方案", "落地")):
+        recommended_id = "action_decision"
+    elif any(token in decision_text for token in ("对比", "竞品", "差距", "battlecard")):
+        recommended_id = "panoramic_comparison"
+    elif any(token in decision_text for token in ("为什么", "机制", "深度", "研究")):
+        recommended_id = "causal_deep_dive"
+
+    candidates: List[Dict[str, Any]] = []
+    for archetype in OUTLINE_ARCHETYPES:
+        sections: List[Dict[str, Any]] = []
+        for index, (heading, purpose) in enumerate(archetype["sections"], start=1):
+            assigned = [claims[(index - 1) % len(claims)]]
+            sections.append(
+                {
+                    "section_id": f"S{index}",
+                    "heading": heading,
+                    "purpose": purpose,
+                    "required_claim_ids": assigned,
+                    "word_budget": 600 if index not in (1, len(archetype["sections"])) else 450,
+                }
+            )
+        candidates.append(
+            {
+                "outline_id": archetype["id"],
+                "name": archetype["name"],
+                "report_family": archetype["report_family"],
+                "title": f"{subject}：{archetype['name']}调研报告",
+                "target_reader": audience,
+                "writing_logic": archetype["writing_logic"],
+                "sections": sections,
+                "tradeoff": {
+                    "panoramic_comparison": "覆盖最全，适合功能盘点，但因果深度相对有限。",
+                    "causal_deep_dive": "解释深，适合专题研究，但不适合只要快速决策的读者。",
+                    "action_decision": "行动清晰，适合管理层，但会压缩背景与方法论篇幅。",
+                }[archetype["id"]],
+            }
+        )
+    recommended_name = next(x["name"] for x in candidates if x["outline_id"] == recommended_id)
+    return {
+        "candidates": candidates,
+        "recommended_outline_id": recommended_id,
+        "recommendation_reason": f"根据读者“{audience}”和决策目标，优先推荐{recommended_name}；用户仍可选择、组合或修改任一大纲。",
+        "approval_required": True,
+    }
+
+
+def approve_outline(
+    outline_plan: Dict[str, Any],
+    selected_outline_id: str,
+    *,
+    approved_by_user: bool,
+    revision_notes: Optional[List[str]] = None,
+    sections_override: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Create the immutable outline contract used by Report Writer."""
+    if not approved_by_user:
+        raise ValueError("大纲必须由用户明确确认，Codex 不得代替用户批准。")
+    candidates = outline_plan.get("candidates", [])
+    selected = next((item for item in candidates if item.get("outline_id") == selected_outline_id), None)
+    if selected is None:
+        raise ValueError(f"未知大纲：{selected_outline_id}")
+    approved = deepcopy(selected)
+    if sections_override is not None:
+        approved["sections"] = deepcopy(sections_override)
+    for section in approved.get("sections", []):
+        if not section.get("heading") or not section.get("purpose"):
+            raise ValueError("每个大纲章节必须包含 heading 和 purpose。")
+        section.setdefault("required_claim_ids", ["CLAIM_SLOT"])
+        section.setdefault("word_budget", 600)
+    approved.update(
+        {
+            "selected_outline_id": selected_outline_id,
+            "approved_by_user": True,
+            "revision_notes": list(revision_notes or []),
+        }
+    )
+    return approved
+
+
+def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Dict[str, Any]) -> Dict[str, Any]:
+    """Verify that a report inherits the approved top-level structure exactly."""
+    expected = [section.get("heading") for section in approved_outline.get("sections", [])]
+    actual = [section.get("heading") for section in report_draft.get("sections", [])]
+    missing = [heading for heading in expected if heading not in actual]
+    unexpected = [heading for heading in actual if heading not in expected]
+    purpose_gaps = [
+        section.get("heading")
+        for section in report_draft.get("sections", [])
+        if not section.get("purpose_addressed", False)
+    ]
+    evidence_gaps = [
+        section.get("heading")
+        for section in report_draft.get("sections", [])
+        if not section.get("claim_ids")
+    ]
+    passed = not missing and not unexpected and actual == expected and not purpose_gaps
+    return {
+        "status": "passed" if passed else "blocked",
+        "missing_sections": missing,
+        "unexpected_sections": unexpected,
+        "order_matches": actual == expected,
+        "purpose_gaps": purpose_gaps,
+        "evidence_gaps": evidence_gaps,
+    }
 
 
 def get_codex_execution_model() -> Dict[str, Any]:

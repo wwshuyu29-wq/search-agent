@@ -1,6 +1,6 @@
 # Search Agent Skill 3.0 — 快速开始
 
-一个基于 **31 个商业分析框架** 与 **多源分层搜索** 的通用调研 skill，覆盖财报、竞品、行业、营销、估值、风险等场景，输出金字塔结构 + 可跳转引文的调研报告。
+一个基于 **31 个商业分析框架** 与 **多源分层搜索** 的通用调研 skill，覆盖竞品、产品、行业、用户、营销、财报与风险等场景。系统会推荐 3 套差异化大纲，由用户确认后严格按所选结构生成带可跳转引文的深度报告，不再强制所有报告套用倒金字塔。
 
 ## 一分钟安装
 
@@ -52,7 +52,9 @@ Step 2 结构化分析：
     - 营销题 → 优先调 marketing/copywriting / cro / seo-audit / ...
     - 通用题 → 走内置 31 框架
     ↓
-Step 3 金字塔报告 + 参考文献表 + 后续行动衔接
+T4 三套候选大纲 + Codex 推荐
+    ↓ 用户在 T5 选择/组合/修改并确认
+T6 按 ApprovedOutline 生成正文 + T7 结构/引文审核 + 参考文献表
 ```
 
 ## 文档索引
@@ -61,6 +63,7 @@ Step 3 金字塔报告 + 参考文献表 + 后续行动衔接
 - [`references/frameworks.md`](./references/frameworks.md) — 31 个分析框架的完整定义（战略 / 营销 / 金融三类）
 - [`references/external-skills.md`](./references/external-skills.md) — 外部 skill 在 Step 0/1/2/3 每个节点的调用矩阵
 - [`references/workflow.md`](./references/workflow.md) — Mermaid 工作流图
+- [`references/team-workflow-guide.md`](./references/team-workflow-guide.md) — 给非技术同事看的完整使用说明、确认闸门和提示词模板
 - [`CHANGELOG.md`](./CHANGELOG.md) — v1.0 → v3.0 演进
 - [`CLAUDE.md`](./CLAUDE.md) — 原始 Claude 版调研助手（保留参考）
 

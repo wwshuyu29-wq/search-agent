@@ -21,10 +21,12 @@ class WorkflowDocsTest(unittest.TestCase):
             "Source Hunter Agent",
             "Framework Analyst Agent",
             "Citation Auditor Agent",
+            "Outline Architect Agent",
+            "Human Outline Approval Gate",
             "Report Writer Agent",
+            "Outline Compliance Auditor Agent",
             "Humanizer Editor Agent",
-            "金字塔结构",
-            "一句话总判断",
+            "ApprovedOutline",
             "去 AI 味",
         ]
 
@@ -121,6 +123,24 @@ class WorkflowDocsTest(unittest.TestCase):
             "不抓取隐私",
         ]:
             self.assertIn(term, social_text)
+
+    def test_team_workflow_guide_explains_business_user_flow(self):
+        text = (REPO_ROOT / "references" / "team-workflow-guide.md").read_text(encoding="utf-8")
+
+        for term in [
+            "Search Agent 团队使用说明",
+            "T1",
+            "T9",
+            "审核卡片",
+            "Source Pack",
+            "Source QA",
+            "Citation Auditor",
+            "Humanizer",
+            "确认闸门",
+            "同事最常用的提示词模板",
+            "AI 不能替你批准发布或归档",
+        ]:
+            self.assertIn(term, text)
 
     def test_usage_documents_workflow_dry_run_command(self):
         text = (REPO_ROOT / "USAGE.md").read_text(encoding="utf-8")

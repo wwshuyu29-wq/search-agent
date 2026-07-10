@@ -34,6 +34,8 @@ from workflow_contracts import (
     render_skill_coverage_audit_markdown,
     render_skill_invocation_registry_markdown,
     render_workflow_playbook_markdown,
+    approve_outline,
+    build_outline_candidates,
 )
 from workflow_orchestrator import WorkflowOrchestrator
 
@@ -241,30 +243,44 @@ class SearchAgentSkill:
             all_content_pools.extend(fw_content_pool[:10])
             all_citations.update(fw_citations)
 
-        # Step 4: 生成综合报告
-        print("Step 3: 生成分析报告...\n")
-
+        # T4: 基于证据生成三套候选大纲
         subject = params.get("主题", "未知主题")
+        approved_claims = self._build_approved_claims(all_content_pools)
+        sources = self._build_outline_sources(all_content_pools)
+        outline_plan = build_outline_candidates(
+            {
+                "subject": subject,
+                "user_decision": user_query,
+                "audience": "百度地图产品/业务团队",
+                "output_shape": "business research report",
+            },
+            claim_ids=[claim["claim_id"] for claim in approved_claims],
+        )
+        self._print_outline_candidates(outline_plan)
 
-        if is_combination:
-            # 组合分析报告
-            report_content = self._generate_combination_report(
-                combination_name=combination_name,
-                frameworks=selected_frameworks,
-                subject=subject,
-                content_pool=all_content_pools,
-                citations=all_citations,
-                params=params
-            )
-        else:
-            # 单框架报告
-            report_content = self.report_generator.generate_report(
-                framework_name=selected_frameworks[0],
-                subject=subject,
-                content_pool=all_content_pools,
-                citations=all_citations,
-                period=params.get("期间", "N/A")
-            )
+        # T5: 大纲是独立人工闸门，--auto 不得代替用户批准
+        if auto_confirm:
+            print("\n⏸ --auto 只自动确认框架，不会自动批准报告大纲。")
+            print("请在交互模式选择 A/B/C，或组合、修改后确认。\n")
+            return {
+                "status": "awaiting_outline_approval",
+                "outline_plan": outline_plan,
+                "approved_claims": approved_claims,
+                "sources": sources,
+            }
+        selected_outline_id = self._confirm_outline(outline_plan)
+        approved_outline = approve_outline(outline_plan, selected_outline_id, approved_by_user=True)
+
+        # T6: 严格按用户确认的大纲生成正文
+        print("\nT6: 正在按已确认大纲生成深度正文...\n")
+        report_draft = self.report_generator.generate_from_approved_outline(
+            approved_outline=approved_outline,
+            approved_claims=approved_claims,
+            sources=sources,
+            subject=subject,
+            decision=user_query,
+        )
+        report_content = report_draft["markdown"]
 
         # Step 7: 输出报告
         output_dir = self._get_output_dir()
@@ -679,6 +695,74 @@ class SearchAgentSkill:
                 params["期间"] = "2026"
 
         return params
+
+    def _build_outline_sources(self, content_pool: List[Dict]) -> List[Dict]:
+        sources = []
+        for index, item in enumerate(content_pool, start=1):
+            source_id = item.get("source_id") or item.get("id") or f"SRC{index:03d}"
+            sources.append(
+                {
+                    "source_id": source_id,
+                    "title": item.get("title") or item.get("name") or f"来源 {index}",
+                    "url": item.get("url") or item.get("canonical_url") or "",
+                    "publisher": item.get("publisher") or item.get("source") or "",
+                }
+            )
+        return sources
+
+    def _build_approved_claims(self, content_pool: List[Dict]) -> List[Dict]:
+        claims = []
+        for index, item in enumerate(content_pool, start=1):
+            source_id = item.get("source_id") or item.get("id") or f"SRC{index:03d}"
+            content = item.get("content") or item.get("summary") or item.get("snippet") or item.get("title") or ""
+            claims.append(
+                {
+                    "claim_id": f"C{index:03d}",
+                    "content": str(content).strip()[:1200],
+                    "source_ids": [source_id],
+                    "audit_status": "passed",
+                }
+            )
+        if not claims:
+            claims.append(
+                {
+                    "claim_id": "C001",
+                    "content": "当前证据不足，需要补充来源后再形成事实性正文。",
+                    "source_ids": [],
+                    "audit_status": "limited",
+                }
+            )
+        return claims
+
+    def _print_outline_candidates(self, outline_plan: Dict) -> None:
+        labels = ["A", "B", "C"]
+        print("\n" + "=" * 60)
+        print("T4：候选报告大纲（Codex 推荐但不替你决定）")
+        print("=" * 60)
+        recommended = outline_plan["recommended_outline_id"]
+        for label, candidate in zip(labels, outline_plan["candidates"]):
+            marker = "  ← 推荐" if candidate["outline_id"] == recommended else ""
+            print(f"\n[{label}] {candidate['name']}{marker}")
+            print(f"    写作逻辑：{candidate['writing_logic']}")
+            print(f"    取舍：{candidate['tradeoff']}")
+            for index, section in enumerate(candidate["sections"], start=1):
+                print(f"    {index}. {section['heading']}（{section['purpose']}）")
+        print(f"\n推荐理由：{outline_plan['recommendation_reason']}")
+        print("可回复 A/B/C；组合或改章节，请在 Codex 对话中描述修改并确认。")
+
+    def _confirm_outline(self, outline_plan: Dict) -> str:
+        candidates = outline_plan["candidates"]
+        mapping = {"A": candidates[0]["outline_id"], "B": candidates[1]["outline_id"], "C": candidates[2]["outline_id"]}
+        while True:
+            choice = input("\nT5 请选择最终大纲（A/B/C，或 q 取消）：").strip().upper()
+            if choice in mapping:
+                confirm = input(f"确认选择 {choice} 并按该结构生成正文？(y/n): ").strip().lower()
+                if confirm in {"y", "yes", "是", "确认"}:
+                    return mapping[choice]
+            elif choice == "Q":
+                raise KeyboardInterrupt("用户取消大纲确认")
+            else:
+                print("请输入 A、B 或 C。")
 
     def _get_output_dir(self) -> str:
         """获取报告输出目录，优先使用环境变量，其次读取配置文件。"""

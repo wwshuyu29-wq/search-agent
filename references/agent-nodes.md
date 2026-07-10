@@ -309,24 +309,61 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Reject unsupported numbers and vague conclusions.
 - Require source replacement or wording downgrade when support is weak.
 
-### Report Writer Agent
+### Outline Architect Agent
 
-**Role**: Convert the audited claim graph into an executive report.
+**Role**: Turn audited claims into three materially different outline candidates.
 
-**Input**: Audited claim graph, source list, framework.
+**Input**: ApprovedClaimGraph, reader, decision, output context.
 
-**Output**: Markdown report.
+**Output**: OutlinePlan with exactly three candidates, one recommendation, reasons, and tradeoffs.
 
 **Must do**:
-- Use conclusion-first logic: 一句话总判断 -> supporting reasons -> framework sections -> risks -> references, while adapting the visible structure to the selected report family.
-- Write a 一句话总判断 only when the evidence supports it.
-- Use 2-5 supporting reasons; default to 3 because business readers scan that shape well, but do not force exactly 3 when evidence says otherwise.
-- Keep every material claim cited.
+- Default candidates: panoramic comparison, causal deep dive, action decision.
+- Map every section to purpose, required_claim_ids, and word_budget.
+- Recommend one based on reader and decision, but never approve for the user.
+- Allow the user to select, combine, reorder, rename, or edit sections.
 
-**Must not do**:
-- Force every report into a visible "三条理由/四个维度/五个建议" pattern when the evidence does not naturally support it.
-- Use filler transitions like "综上所述", "值得注意的是", "从多个维度来看" unless they carry meaning.
-- Write generic consultant prose that could fit any company.
+### Human Outline Approval Gate
+
+**Role**: Capture the user's final structural decision.
+
+**Input**: OutlinePlan.
+
+**Output**: ApprovedOutline.
+
+**Hard gate**:
+- Never infer approval from silence.
+- No report prose before approved_by_user=true.
+- Confirmed top-level headings and order are immutable until re-approved.
+
+### Report Writer Agent
+
+**Role**: Develop deep prose inside the user-approved outline.
+
+**Input**: ApprovedOutline, ApprovedClaimGraph, source list, reader/decision context.
+
+**Output**: ReportDraft.
+
+**Must do**:
+- Preserve the exact top-level section names and order from ApprovedOutline.
+- Complete every section purpose using its required_claim_ids and word_budget.
+- Use only passed claims from Citation Auditor Agent.
+- Mark evidence gaps instead of filling them with generic prose.
+- Attach citations inline and include a complete references table.
+- Use conclusion-first only when the approved outline calls for it.
+
+### Outline Compliance Auditor Agent
+
+**Role**: Block structural drift before Humanizer.
+
+**Input**: ApprovedOutline + ReportDraft.
+
+**Output**: OutlineComplianceReview.
+
+**Must do**:
+- Check missing, unexpected, or reordered sections.
+- Check whether each section purpose and required evidence slots were addressed.
+- Return blocked status on any unapproved top-level structural change.
 
 ### Humanizer Editor Agent
 

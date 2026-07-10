@@ -328,31 +328,73 @@
 
 **进入下一步条件**：Unsupported claims are removed, rewritten, or downgraded before report writing.
 
-**交给下一步**：Report Writer after CitationAudit passes.
+**交给下一步**：Outline Architect after CitationAudit passes.
 
 **硬约束**：No citation, no factual claim.；A source that mentions a topic does not automatically support the sentence.
 
+## Outline Architect Agent
+
+**输入**：ApprovedClaimGraph + IntentBrief
+
+**职责边界**：只设计大纲，不写正文。
+
+**LLM判断**：生成全景对比、因果深挖、行动决策三套差异化结构，并按读者/决策推荐一套。
+
+**skill/tool调用**：brainstorming；writing-plans；content-strategy
+
+**可做**：推荐；解释取舍；绑定 claim_ids；分配字数
+
+**不可做**：替用户确认；给三个换皮大纲；写正文
+
+**输出artifact**：OutlinePlan
+
+**进入下一步条件**：三套大纲完整且推荐理由明确。
+
+## Human Outline Approval Gate
+
+**输入**：OutlinePlan
+
+**职责边界**：展示推荐，记录用户选择、组合或修改。
+
+**输出artifact**：ApprovedOutline
+
+**进入下一步条件**：approved_by_user=true。
+
+**硬约束**：不得从沉默推断批准；未确认不得写正文。
+
 ## Report Writer Agent
 
-**输入**：ApprovedClaimGraph + CitationAudit + CleanSourceList
+**输入**：ApprovedOutline + ApprovedClaimGraph + CleanSourceList
 
-**职责边界**：Only compresses approved claims into the selected reader-facing report family.
+**职责边界**：只在用户确认的结构内扩写深度正文。
 
-**LLM判断**：Choose a reader-appropriate report family and compress claims into a useful decision document.
+**LLM判断**：按章节 purpose、required_claim_ids 和 word_budget 完成论证。
 
-**skill/tool调用**：report family selector；reference table renderer；optional generative-ui for finance/visual analysis
+**skill/tool调用**：writing-plans；copywriting；content-strategy
 
-**可做**：Select report family；write conclusion-first draft；render references；state risks
+**可做**：扩写论证；保留引文；暴露证据缺口；写参考文献
 
-**不可做**：Add uncited claims；force a fixed template；hide uncertainty
+**不可做**：新增/删除/改名/重排一级章节；添加未审计 claims；强套倒金字塔
 
 **输出artifact**：ReportDraft
 
-**进入下一步条件**：The draft answers the user decision, preserves citations, and states uncertainty.
+**进入下一步条件**：正文严格继承 ApprovedOutline。
 
-**交给下一步**：Humanizer Editor.
+**交给下一步**：Outline Compliance Auditor.
 
-**硬约束**：Do not force a visible rule-of-three or one-size-fits-all pyramid template.；The conclusion-first logic must be supported by the audited claim graph.
+## Outline Compliance Auditor Agent
+
+**输入**：ApprovedOutline + ReportDraft
+
+**职责边界**：只审核结构一致性，不改写正文。
+
+**skill/tool调用**：copy-editing；verification-before-completion
+
+**输出artifact**：OutlineComplianceReview
+
+**进入下一步条件**：status=passed 后才能交 Humanizer。
+
+**硬约束**：章节缺失、顺序变化或未经确认的新章节必须阻塞。
 
 ## Humanizer Editor Agent
 

@@ -14,7 +14,7 @@ LIB_DIR = Path(__file__).resolve().parent
 if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
-from workflow_contracts import recommend_report_family
+from workflow_contracts import recommend_report_family, review_outline_compliance
 
 
 class ReportGenerator:
@@ -297,6 +297,94 @@ class ReportGenerator:
 
     def __init__(self):
         pass
+
+    def generate_from_approved_outline(
+        self,
+        approved_outline: Dict[str, Any],
+        approved_claims: List[Dict[str, Any]],
+        sources: List[Dict[str, Any]],
+        subject: str,
+        decision: str,
+    ) -> Dict[str, Any]:
+        """Generate a report whose top-level structure exactly follows ApprovedOutline."""
+        if not approved_outline or not approved_outline.get("approved_by_user"):
+            raise ValueError("未获得用户确认的 ApprovedOutline，禁止生成正文。")
+        outline_sections = approved_outline.get("sections", [])
+        if not outline_sections:
+            raise ValueError("ApprovedOutline 至少需要一个章节。")
+
+        claims_by_id = {claim.get("claim_id"): claim for claim in approved_claims if claim.get("claim_id")}
+        source_map = {source.get("source_id"): source for source in sources if source.get("source_id")}
+        draft_sections: List[Dict[str, Any]] = []
+        markdown_parts = [
+            f"# {approved_outline.get('title') or subject}",
+            "",
+            f"**目标读者**：{approved_outline.get('target_reader', '业务决策者')}",
+            f"**决策问题**：{decision}",
+            f"**写作逻辑**：{approved_outline.get('writing_logic', '')}",
+            "",
+        ]
+
+        for section_contract in outline_sections:
+            heading = section_contract["heading"]
+            claim_ids = list(section_contract.get("required_claim_ids", []))
+            section_claims = [claims_by_id[claim_id] for claim_id in claim_ids if claim_id in claims_by_id]
+            paragraphs: List[str] = []
+            for claim in section_claims:
+                content = claim.get("content") or claim.get("claim") or claim.get("text") or ""
+                citations = []
+                for source_id in claim.get("source_ids", []):
+                    source = source_map.get(source_id, {})
+                    url = source.get("url") or source.get("canonical_url") or ""
+                    citations.append(f"[{source_id}]({url})" if url else source_id)
+                suffix = f"（来源：{', '.join(citations)}）" if citations else "（证据：[待补证据]）"
+                paragraphs.append(f"{content}{suffix}")
+            if not paragraphs:
+                paragraphs.append(
+                    f"[待扩写] 本节需要完成：{section_contract.get('purpose', '')}。"
+                    f" 当前证据槽位：{', '.join(claim_ids) or '[待补证据]'}。"
+                )
+            draft_section = {
+                "section_id": section_contract.get("section_id"),
+                "heading": heading,
+                "purpose": section_contract.get("purpose", ""),
+                "purpose_addressed": bool(section_claims),
+                "claim_ids": [claim.get("claim_id") for claim in section_claims],
+                "word_budget": section_contract.get("word_budget", 600),
+                "content": "\n\n".join(paragraphs),
+            }
+            draft_sections.append(draft_section)
+            markdown_parts.extend([f"## {heading}", "", draft_section["content"], ""])
+
+        referenced_source_ids: List[str] = []
+        for section in draft_sections:
+            for claim_id in section["claim_ids"]:
+                for source_id in claims_by_id.get(claim_id, {}).get("source_ids", []):
+                    if source_id not in referenced_source_ids:
+                        referenced_source_ids.append(source_id)
+        references = [source_map[source_id] for source_id in referenced_source_ids if source_id in source_map]
+        if references:
+            markdown_parts.extend(["## 参考文献", ""])
+            for source in references:
+                source_id = source.get("source_id")
+                title = source.get("title", "未命名来源")
+                url = source.get("url") or source.get("canonical_url") or ""
+                markdown_parts.append(f"- {source_id}：[{title}]({url})" if url else f"- {source_id}：{title}")
+
+        report = {
+            "report_family": approved_outline.get("report_family", "deep_research_report"),
+            "approved_outline_id": approved_outline.get("selected_outline_id"),
+            "reader": approved_outline.get("target_reader"),
+            "decision": decision,
+            "sections": draft_sections,
+            "references": references,
+            "markdown": "\n".join(markdown_parts).rstrip() + "\n",
+        }
+        compliance = review_outline_compliance(approved_outline, report)
+        if compliance["status"] != "passed":
+            raise ValueError(f"正文偏离已确认大纲：{compliance}")
+        report["outline_compliance"] = compliance
+        return report
 
     def generate_report(
         self,

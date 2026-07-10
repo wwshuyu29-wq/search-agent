@@ -28,7 +28,10 @@ class WorkflowContractsTest(unittest.TestCase):
             "finance_specialist",
             "marketing_specialist",
             "citation_auditor",
+            "outline_architect",
+            "human_outline_gate",
             "report_writer",
+            "outline_compliance_auditor",
             "humanizer_editor",
             "integrity_diff_checker",
         ]
@@ -210,6 +213,56 @@ class WorkflowContractsTest(unittest.TestCase):
             "evidence_brief",
         )
 
+    def test_outline_candidates_offer_three_distinct_structures_and_recommend_one(self):
+        from workflow_contracts import build_outline_candidates
+
+        plan = build_outline_candidates(
+            {
+                "subject": "高德地图新功能",
+                "user_decision": "判断百度地图是否跟进",
+                "audience": "百度地图产品团队",
+                "output_shape": "竞品研究报告",
+            },
+            claim_ids=["C001", "C002", "C003", "C004"],
+        )
+        self.assertEqual(3, len(plan["candidates"]))
+        self.assertIn(plan["recommended_outline_id"], {x["outline_id"] for x in plan["candidates"]})
+        self.assertTrue(plan["recommendation_reason"])
+        self.assertEqual(3, len({x["writing_logic"] for x in plan["candidates"]}))
+        for candidate in plan["candidates"]:
+            self.assertGreaterEqual(len(candidate["sections"]), 4)
+            self.assertTrue(all(section["required_claim_ids"] for section in candidate["sections"]))
+
+    def test_approved_outline_requires_explicit_user_approval(self):
+        from workflow_contracts import approve_outline
+
+        plan = {
+            "recommended_outline_id": "outline_a",
+            "candidates": [
+                {
+                    "outline_id": "outline_a",
+                    "report_family": "deep_research_report",
+                    "title": "测试大纲",
+                    "target_reader": "产品团队",
+                    "writing_logic": "问题到建议",
+                    "sections": [
+                        {
+                            "section_id": "S1",
+                            "heading": "问题",
+                            "purpose": "解释问题",
+                            "required_claim_ids": ["C001"],
+                            "word_budget": 500,
+                        }
+                    ],
+                }
+            ],
+        }
+        with self.assertRaises(ValueError):
+            approve_outline(plan, "outline_a", approved_by_user=False)
+        approved = approve_outline(plan, "outline_a", approved_by_user=True)
+        self.assertTrue(approved["approved_by_user"])
+        self.assertEqual("outline_a", approved["selected_outline_id"])
+
     def test_artifact_contracts_define_required_handoff_fields(self):
         from workflow_contracts import get_artifact_contracts
 
@@ -233,7 +286,10 @@ class WorkflowContractsTest(unittest.TestCase):
             "ClaimGraphPatch",
             "CitationAudit",
             "ApprovedClaimGraph",
+            "OutlinePlan",
+            "ApprovedOutline",
             "ReportDraft",
+            "OutlineComplianceReview",
             "HumanizerChangeLog",
             "FinalReport",
             "IntegrityDiff",

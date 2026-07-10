@@ -1,6 +1,6 @@
 ---
 name: search-agent
-description: 通用商业调研 skill，覆盖财报分析、竞品研究、行业调研、营销策略、宏观/政策分析、风险评估、估值判断等场景。基于 31 个战略/营销/金融分析框架（PEST / Porter 五力 / 3C / SWOT / 4P / STP / AARRR / JTBD / CBBE / 财报快评 / 深度财报 / 杜邦 / DCF / 相对估值 / 护城河 / Altman Z / Beneish M / 风险专项 等）驱动多源分层搜索（Firecrawl + realtime-search + baidu-search + enterprise-search + 财经 RSS），输出带引文可跳转的金字塔结构调研报告。
+description: 通用商业调研 skill，覆盖竞品功能、行业趋势、用户需求、营销策略、财报与风险等场景。基于 31 个战略/营销/金融框架驱动多源搜索，先给出 3 套差异化报告大纲并推荐其一，由用户选择或修改后，再严格按已确认大纲生成带可跳转引文的深度正文；不强制所有报告采用倒金字塔结构。
 ---
 
 # Search Agent 智能分析系统
@@ -531,7 +531,41 @@ sources:
 
 ---
 
-## Step 3：金字塔调研报告生成
+## T4：生成 3 套候选大纲并给出推荐
+
+完成结构化分析和引文审计后，Outline Architect Agent 必须生成 3 套逻辑真正不同的大纲：
+
+1. **全景对比型**：事实全景 → 维度对比 → 用户反馈 → 差距判断 → 我方行动
+2. **因果深挖型**：现象 → 成因 → 机制 → 影响 → 战略含义
+3. **行动决策型**：决策问题 → 选项 → 取舍 → 行动 → 验证
+
+每套必须写明：目标读者、写作逻辑、适用场景、取舍、章节顺序、每章目的、`required_claim_ids` 和字数预算。
+
+Codex 要根据读者和业务决策**推荐其中一套并解释理由**，但用户拥有最终选择权，可选择推荐项、另外两项，或组合/修改后确认。
+
+## T5：用户选择并确认大纲（强制闸门）
+
+- 未获得用户明确确认，不得生成正文；
+- 不得从沉默推断确认；
+- 用户确认后生成 `ApprovedOutline`；
+- 已确认的一级章节、顺序、目的和证据槽位成为正文结构契约；
+- 结构如需变化，必须重新请用户确认。
+
+## T6：严格按 ApprovedOutline 扩写深度正文
+
+Report Writer 只能接收 `ApprovedOutline + ApprovedClaimGraph`：
+
+1. 严格按章节顺序逐章扩写；
+2. 每章完成 `purpose` 指定的分析任务；
+3. 使用 `required_claim_ids` 对应证据；
+4. 遵守 `word_budget`；
+5. 不得擅自新增、删除、改名或调换一级章节；
+6. 证据不足标 `[待补证据]`，不得用套话填充；
+7. 倒金字塔只属于行动决策型，不再是统一模板。
+
+## T7：大纲一致性审核 + Humanizer
+
+Outline Compliance Auditor 检查章节完整性、顺序、目的、证据槽位和篇幅平衡。任一结构项不通过，退回 Report Writer，不得声称完成。
 
 ### 可视化增强
 
@@ -560,20 +594,13 @@ Step 3 报告输出后若用户问"接下来怎么做"，自动衔接以下 skil
 
 完整衔接矩阵见 `references/external-skills.md`。
 
-### 报告形态（按读者和决策选择，不硬套模板）
+### 报告形态与大纲的关系
 
-报告模板只规定最低证据结构，不代表直接填空。生成前必须先由 Framework Analyst Agent 产出带 source_id 的 claim graph，再由 Citation Auditor Agent 校验引文，再由 Report Writer Agent 根据读者和决策选择报告形态，最后由 Humanizer Editor Agent 去 AI 味：删除空泛套话、强行三段论、模板化转折和泛化形容词，同时保留引用、数字和风险边界。完整报告逻辑见 `references/agent-nodes.md`，可执行报告形态选择见 `lib/workflow_contracts.py`。
+六种 `report_family` 仍用于说明交付类型：Decision Memo / Deep Research / Competitive Battlecard / Finance Note / Growth Plan / Evidence Brief；但它们**不直接决定正文结构**。
 
-| 报告形态 | 适用场景 | 结构重点 |
-|---|---|---|
-| Executive Decision Memo | 市场组、业务动作、竞品反制 | 判断 + 证据 + 动作 + 风险 |
-| Deep Research Report | 复杂行业/战略研究 | 结论 + 框架推理链 + 证据表 |
-| Competitive Battlecard | 竞品对比/销售市场应对 | 对比表 + 差距 + 应对选项 |
-| Finance / Investment Note | 财报/估值/投资判断 | thesis + 关键数字 + 驱动 + 风险 |
-| Growth / GTM Plan | 增长/营销/发布计划 | 目标 + 人群 + 杠杆 + 实验 + 指标 |
-| Evidence Brief | 单一事实/单一金融数字 | 答案 + 来源 + 时间戳 + 限制 |
+真正约束正文的是用户在 T5 确认的 `ApprovedOutline`。T4 可根据报告类型推荐全景对比型、因果深挖型或行动决策型，但不能替用户做最终选择。
 
-下方是默认骨架，不是硬性话术。支撑理由按证据强度保留 2-5 条，默认 3 条只是方便业务读者扫描；证据不足时不得凑满。
+下方只展示行动决策型的参考骨架。用户选择其他大纲时不得套用。
 
 ```markdown
 # [调研主题] 调研报告
@@ -633,7 +660,7 @@ Step 3 报告输出后若用户问"接下来怎么做"，自动衔接以下 skil
 
 ### 报告语气规范
 
-- **结论先行**，数字后必有解释（不要只堆数据）
+- **遵循用户确认的大纲逻辑**；仅行动决策型要求结论先行，其他类型可采用因果递进、主题展开或对比结构
 - 不确定判断标注**置信度：高 / 中 / 低**
 - **禁止**"可能 / 或许 / 也许 / 大概"等无价值模糊词
 - 重要数字**加粗**，趋势用 ↑ ↓ → 标注

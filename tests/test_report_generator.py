@@ -16,6 +16,75 @@ def load_module(module_name, path):
 
 
 class ReportGeneratorTest(unittest.TestCase):
+    def test_generate_from_approved_outline_preserves_exact_section_order(self):
+        report_module = load_module(
+            "report_generator_for_outline_test",
+            REPO_ROOT / "lib" / "report_generator.py",
+        )
+        generator = report_module.ReportGenerator()
+        approved_outline = {
+            "selected_outline_id": "causal_deep_dive",
+            "approved_by_user": True,
+            "report_family": "deep_research_report",
+            "title": "高德地图新功能深度研究",
+            "target_reader": "百度地图产品团队",
+            "writing_logic": "现象 → 成因 → 机制 → 影响 → 战略含义",
+            "sections": [
+                {
+                    "section_id": "S1",
+                    "heading": "现象与关键问题",
+                    "purpose": "定义变化",
+                    "required_claim_ids": ["C001"],
+                    "word_budget": 500,
+                },
+                {
+                    "section_id": "S2",
+                    "heading": "战略含义与优先议题",
+                    "purpose": "形成建议",
+                    "required_claim_ids": ["C002"],
+                    "word_budget": 600,
+                },
+            ],
+        }
+        claims = [
+            {"claim_id": "C001", "content": "高德发布新功能。", "source_ids": ["OFF001"]},
+            {"claim_id": "C002", "content": "百度地图应验证用户价值。", "source_ids": ["MED001"]},
+        ]
+        sources = [
+            {"source_id": "OFF001", "title": "官方更新", "url": "https://example.com/official"},
+            {"source_id": "MED001", "title": "媒体分析", "url": "https://example.com/media"},
+        ]
+
+        report = generator.generate_from_approved_outline(
+            approved_outline=approved_outline,
+            approved_claims=claims,
+            sources=sources,
+            subject="高德地图",
+            decision="是否跟进",
+        )
+
+        self.assertEqual("causal_deep_dive", report["approved_outline_id"])
+        self.assertEqual(
+            ["现象与关键问题", "战略含义与优先议题"],
+            [section["heading"] for section in report["sections"]],
+        )
+        self.assertNotIn("核心结论", [section["heading"] for section in report["sections"]])
+        self.assertIn("# 现象与关键问题", report["markdown"])
+        self.assertLess(report["markdown"].index("# 现象与关键问题"), report["markdown"].index("# 战略含义与优先议题"))
+
+    def test_generate_from_approved_outline_blocks_unapproved_outline(self):
+        report_module = load_module(
+            "report_generator_for_unapproved_outline_test",
+            REPO_ROOT / "lib" / "report_generator.py",
+        )
+        with self.assertRaises(ValueError):
+            report_module.ReportGenerator().generate_from_approved_outline(
+                approved_outline={"approved_by_user": False, "sections": []},
+                approved_claims=[],
+                sources=[],
+                subject="测试",
+                decision="测试",
+            )
     def test_structured_report_renders_citations_and_references_without_placeholders(self):
         report_module = load_module(
             "report_generator_for_structured_test",
