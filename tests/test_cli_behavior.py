@@ -103,6 +103,19 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("**输入**", printed)
         self.assertIn("**进入下一步条件**", printed)
 
+    def test_cli_can_print_skill_invocation_registry(self):
+        agent = SearchAgentSkill()
+
+        with patch("builtins.print") as mocked_print:
+            agent.print_skill_invocation_registry()
+
+        printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+        self.assertIn("# Skill Invocation Registry", printed)
+        self.assertIn("finance_data_hunter", printed)
+        self.assertIn("yfinance-data", printed)
+        self.assertIn("marketing-plan", printed)
+        self.assertIn("Can Support Claim", printed)
+
     def test_cli_can_run_workflow_dry_run(self):
         agent = SearchAgentSkill()
 
@@ -193,6 +206,8 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("Sub-Agent Node Packets", printed)
         self.assertIn("official_source_hunter", printed)
         self.assertIn("## Hard Constraints", printed)
+        self.assertIn("skill_invocation_rules", printed)
+        self.assertIn("can_support_claim", printed)
 
     def test_cli_can_execute_one_source_hunter_and_persist_fragment(self):
         agent = SearchAgentSkill()
@@ -262,6 +277,124 @@ class CliBehaviorTest(unittest.TestCase):
                 agent.execute_source_hunter("official_source_hunter", str(state_file))
 
         self.assertIn("SearchPlan", str(context.exception))
+
+    def test_cli_can_execute_all_source_hunters_and_persist_fragments(self):
+        agent = SearchAgentSkill()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "search_agent_state.json"
+            state = {
+                "schema_version": "workflow_state.v1",
+                "status": "ready_for_execution",
+                "current_phase": "step1_parallel_source_hunting",
+                "pending_gate": "source_list_fragment_valid",
+                "artifacts": {
+                    "SearchPlan": {
+                        "frameworks": ["同行竞争对比"],
+                        "tasks": [
+                            {
+                                "task_id": "ALL-T001",
+                                "assigned_hunter": "official_source_hunter",
+                                "dimension": "全量检索",
+                                "query_zh": ["高德地图 新功能"],
+                                "query_en": ["AAPL stock price"],
+                                "source_layers": ["official"],
+                                "expected_evidence": ["来源"],
+                                "source_id_prefix": "OFF",
+                            }
+                        ],
+                    }
+                },
+            }
+            state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+            def fake_fragment(hunter_id, search_plan, limit_per_query):
+                return {
+                    "node_id": hunter_id,
+                    "execution_status": "completed",
+                    "task_ids": [],
+                    "sources": [],
+                    "warnings": [],
+                }
+
+            with patch("search_agent.SourceHunterExecutor") as executor_class:
+                executor_class.return_value.run_hunter.side_effect = fake_fragment
+                with patch("builtins.print") as mocked_print:
+                    fragments = agent.execute_all_source_hunters(
+                        str(state_file),
+                        limit_per_query=2,
+                    )
+
+            saved = json.loads(state_file.read_text(encoding="utf-8"))
+            printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+
+        self.assertEqual(len(fragments), 6)
+        self.assertEqual(executor_class.return_value.run_hunter.call_count, 6)
+        self.assertEqual(len(saved["artifacts"]["SourceListFragment"]), 6)
+        self.assertIn("All Source Hunters Executed", printed)
+        self.assertIn("official_source_hunter", printed)
+        self.assertIn("marketing_intelligence_hunter", printed)
+
+    def test_cli_can_continue_workflow_from_source_fragments(self):
+        agent = SearchAgentSkill()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "search_agent_state.json"
+            state = agent.start_gate_workflow(
+                "高德地图最近三个月上新，对百度地图市场组有什么启示",
+                str(state_file),
+            )
+            state["artifacts"]["SearchPlan"] = {
+                "frameworks": ["同行竞争对比"],
+                "tasks": [
+                    {
+                        "task_id": "RSS-T001",
+                        "assigned_hunter": "rss_news_hunter",
+                        "dimension": "RSS",
+                        "query_zh": ["高德地图 新功能"],
+                        "query_en": [],
+                        "source_layers": ["rss"],
+                        "expected_evidence": ["RSS"],
+                        "source_id_prefix": "RSS",
+                    }
+                ],
+            }
+            state["artifacts"]["SourceListFragment"] = [
+                {
+                    "node_id": "rss_news_hunter",
+                    "execution_status": "completed",
+                    "task_ids": ["RSS-T001"],
+                    "sources": [
+                        {
+                            "source_id": "RSS001",
+                            "title": "高德地图新功能报道",
+                            "publisher": "示例媒体",
+                            "source_type": "rss_news",
+                            "publish_date": "2026-07-10",
+                            "url": "https://example.com/amap",
+                            "canonical_url": "https://example.com/amap",
+                            "confidence": "medium",
+                            "key_facts": ["高德地图上线新功能。"],
+                            "full_text_fetched": False,
+                            "collected_by": "RSS/News Hunter",
+                            "confidence_rationale": "test source",
+                        }
+                    ],
+                    "warnings": [],
+                }
+            ]
+            state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+            with patch("builtins.print") as mocked_print:
+                continued = agent.continue_workflow_from_sources(str(state_file))
+
+            saved = json.loads(state_file.read_text(encoding="utf-8"))
+            printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+
+        self.assertEqual(continued["pending_gate"], "final_report_review")
+        self.assertEqual(saved["artifacts"]["RawSourceList"]["source_count"], 1)
+        self.assertIn("Workflow Continued From Source Fragments", printed)
+        self.assertIn("raw_sources: 1", printed)
 
     def test_cli_can_print_codex_execution_model(self):
         agent = SearchAgentSkill()

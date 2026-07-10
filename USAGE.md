@@ -112,13 +112,49 @@ R0 执行层现在会验证这条证据链：`SourceListFragment → SourceList 
 
 `真实检索竖切` 是先选一条最短但完整的真实链路跑通：从 `SearchPlan` 里拿一个子 agent 的检索任务，调用真实检索工具，拿到网页/文章结果，再标准化成 `SourceListFragment` 写回状态文件。它暂时不要求六个检索子 agent 全部完美，但要求其中一条真的能拿资料、能落 artifact、能被下一步合并和 QA 使用。
 
-现在已经接入的第一条竖切是：`SearchPlan → Official/Media/... Source Hunter → Firecrawl 检索适配器 → SourceListFragment`。如果没有配置 `FIRECRAWL_API_KEY`，命令会明确标记 `skipped_missing_tool_config`，不会伪造来源。
+现在已经接入两条竖切：
+
+1. `SearchPlan → Official/Media/... Source Hunter → Firecrawl 检索适配器 → SourceListFragment`
+2. `SearchPlan → RSS/News Hunter → finance-rss-reader → SourceListFragment`
+
+第一条需要 `FIRECRAWL_API_KEY`；如果没配置，命令会明确标记 `skipped_missing_tool_config`，不会伪造来源。第二条走项目内置 `finance-rss-reader` 脚本，不依赖 Firecrawl key，适合验证“不是所有 Source Hunter 都走同一个通用网页搜索”。
 
 在正式状态机生成 `SearchPlan` 后，可以执行某个检索子 agent：
 
 ```bash
 python bin/search_agent.py --execute-source-hunter official_source_hunter --state-file search_agent_state.json --limit-per-query 5
 ```
+
+执行 RSS/News Hunter：
+
+```bash
+SEARCH_AGENT_RSS_MAX_SOURCES=5 python bin/search_agent.py --execute-source-hunter rss_news_hunter --state-file search_agent_state.json --limit-per-query 5
+```
+
+`SEARCH_AGENT_RSS_MAX_SOURCES` 是本地调试限速用的；正式跑可以不设置，让 RSS 脚本扫描完整来源池。
+
+一次执行全部 Source Hunter：
+
+```bash
+SEARCH_AGENT_RSS_MAX_SOURCES=5 python bin/search_agent.py --execute-source-hunters --state-file search_agent_state.json --limit-per-query 5
+```
+
+Source Hunter 写回真实 `SourceListFragment` 后，继续进入合并、QA、分析和报告：
+
+```bash
+python bin/search_agent.py --workflow-continue-from-sources --state-file search_agent_state.json
+```
+
+当前真实工具路由：
+
+| Source Hunter | 真实执行入口 | 配置要求 |
+|---|---|---|
+| `official_source_hunter` | Firecrawl 搜索/抓取 | `FIRECRAWL_API_KEY` |
+| `media_source_hunter` | Firecrawl 搜索/抓取 | `FIRECRAWL_API_KEY` |
+| `rss_news_hunter` | `finance-rss-reader/scripts/rss_fetch.py` | 无必需 key；可选 `SEARCH_AGENT_RSS_MAX_SOURCES` |
+| `ugc_social_hunter` | `bili search ... --json` | 安装 `bili`；其他平台后续通过 agent-reach/opencli 扩展 |
+| `finance_data_hunter` | `scripts/yfinance_snapshot.py` + `yfinance-data` | `pip install -r requirements.txt` |
+| `marketing_intelligence_hunter` | 本地 marketing skill catalog | 无必需 key；输出 method source，不当作市场事实 |
 
 常用 hunter id：
 
@@ -135,6 +171,12 @@ python bin/search_agent.py --execute-source-hunter official_source_hunter --stat
 
 ```bash
 python bin/search_agent.py --workflow-playbook
+```
+
+想查看每个节点能调用哪些 skill/tool、怎么调用、产物能不能当证据：
+
+```bash
+python bin/search_agent.py --skill-registry
 ```
 
 想确认 Codex 里 LLM 到底怎么被调用：
@@ -508,6 +550,9 @@ python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --workf
 python3 bin/search_agent.py "高德地图 2026 上半年新功能盘点" --workflow-start --state-file search_agent_state.json
 python3 bin/search_agent.py --workflow-resume 确认 --state-file search_agent_state.json
 python3 bin/search_agent.py --workflow-packets step1_parallel_source_hunting --state-file search_agent_state.json
+python3 bin/search_agent.py --execute-source-hunters --state-file search_agent_state.json --limit-per-query 5
+python3 bin/search_agent.py --workflow-continue-from-sources --state-file search_agent_state.json
+python3 bin/search_agent.py --skill-registry
 python3 bin/search_agent.py --workflow-playbook
 python3 bin/search_agent.py --codex-execution
 ```

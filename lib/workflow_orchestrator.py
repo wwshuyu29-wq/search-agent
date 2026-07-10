@@ -13,6 +13,7 @@ from workflow_contracts import (
     get_artifact_contracts,
     get_node_contracts,
     get_orchestration_plan,
+    get_skill_invocations_for_node,
 )
 
 
@@ -69,6 +70,7 @@ class WorkflowOrchestrator:
                     "input_payload": input_payload,
                     "prompt": build_agent_prompt(node_id),
                     "allowed_tools_or_skills": deepcopy(node["tool_or_skill_use"]),
+                    "skill_invocation_rules": get_skill_invocations_for_node(node_id),
                     "output_artifact": deepcopy(node["output_artifact"]),
                     "quality_gate": node["quality_gate"],
                     "hard_constraints": deepcopy(node["hard_constraints"]),
@@ -647,6 +649,73 @@ class WorkflowOrchestrator:
             user_decision=user_decision,
         )
 
+    def continue_from_source_fragments(self, state: Dict[str, Any], user_decision: str = "source fragments ready") -> Dict[str, Any]:
+        """Continue a workflow using already-executed real SourceListFragment artifacts."""
+        artifacts = deepcopy(state.get("artifacts", {}))
+        validations = deepcopy(state.get("validations", []))
+        phase_results = deepcopy(state.get("phase_results", []))
+
+        if "SearchPlan" not in artifacts:
+            raise ValueError("SearchPlan artifact is required before continuing from source fragments")
+        if "SourceListFragment" not in artifacts:
+            raise ValueError("SourceListFragment artifact is required before continuing from source fragments")
+
+        raw_source_list, merger_log = self.merge_source_fragments(artifacts["SourceListFragment"])
+        artifacts["RawSourceList"] = raw_source_list
+        artifacts["MergerLog"] = merger_log
+        validations.extend(self._validate_many({"RawSourceList": raw_source_list, "MergerLog": merger_log}))
+        phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
+
+        source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
+            self._build_dry_source_qa(raw_source_list["sources"])
+        )
+        artifacts["SourceQANotes"] = source_qa_notes
+        artifacts["ConflictRegister"] = conflict_register
+        artifacts["GapList"] = gap_list
+        artifacts["CleanSourceList"] = clean_source_list
+        validations.extend(
+            self._validate_many(
+                {
+                    "SourceQANotes": source_qa_notes,
+                    "ConflictRegister": conflict_register,
+                    "GapList": gap_list,
+                    "CleanSourceList": clean_source_list,
+                }
+            )
+        )
+        phase_results.append(
+            self._phase_result("step1_source_qa", ["SourceQANotes", "ConflictRegister", "GapList", "CleanSourceList"])
+        )
+
+        if self._source_qa_requires_user(source_qa_notes):
+            return self._workflow_state(
+                status="waiting_for_user",
+                current_phase="step1_source_qa",
+                pending_gate="source_qa_conflict_resolution",
+                artifacts=artifacts,
+                validations=validations,
+                phase_results=phase_results,
+                next_action="Source QA 发现真实来源冲突或缺口，请选择口径或要求补充来源。",
+                user_decision=user_decision,
+            )
+
+        supplemental_source_list, refetch_notes = self._build_dry_gap_fill(conflict_register, gap_list)
+        artifacts["SupplementalSourceList"] = supplemental_source_list
+        artifacts["RefetchNotes"] = refetch_notes
+        validations.extend(
+            self._validate_many({"SupplementalSourceList": supplemental_source_list, "RefetchNotes": refetch_notes})
+        )
+        phase_results.append(
+            self._phase_result("step1_gap_fill_or_pause", ["SupplementalSourceList", "RefetchNotes"])
+        )
+
+        return self._run_analysis_to_final(
+            artifacts=artifacts,
+            validations=validations,
+            phase_results=phase_results,
+            user_decision=user_decision,
+        )
+
     def _source_qa_requires_user(self, source_qa_notes: Dict[str, Any]) -> bool:
         return bool(
             source_qa_notes.get("number_conflicts")
@@ -855,25 +924,28 @@ class WorkflowOrchestrator:
         )
 
     def _build_dry_claim_graph(self, clean_source_list: Dict[str, Any]) -> Dict[str, Any]:
+        source_ids = [source["source_id"] for source in clean_source_list.get("sources", [])]
+        primary_ids = source_ids[:3] or ["NO_SOURCE"]
+        secondary_ids = source_ids[-2:] or primary_ids
         return {
             "claims": [
                 {
                     "claim_id": "CL001",
                     "dimension": "竞品变化",
                     "claim_type": "fact",
-                    "text": "dry-run 证据池已经覆盖官方、媒体、RSS、UGC、金融和营销情报来源。",
-                    "source_ids": ["OFF001", "MED001", "RSS001"],
+                    "text": "Source Hunter 已产出可进入 QA 和分析阶段的结构化来源清单。",
+                    "source_ids": primary_ids,
                     "confidence": "high",
-                    "reasoning_basis": "来源类型覆盖完整，且通过 Source QA schema 校验。",
+                    "reasoning_basis": "来源清单通过 schema 校验，并保留 source_id、URL、publisher、confidence_rationale。",
                 },
                 {
                     "claim_id": "CL002",
                     "dimension": "业务启示",
                     "claim_type": "judgment",
-                    "text": "该 workflow 可以进入报告生成阶段，但真实结论必须替换为实搜证据。",
-                    "source_ids": ["OFF001", "MKT001"],
+                    "text": "该 workflow 可以从真实检索结果继续进入报告生成阶段，但业务判断仍需 Citation Auditor 逐条校验。",
+                    "source_ids": secondary_ids,
                     "confidence": "medium",
-                    "reasoning_basis": "当前为 dry-run，占位证据只证明流程可运行，不证明业务事实。",
+                    "reasoning_basis": "Source QA 批准的来源可以作为候选证据，但方法型来源不能单独证明市场事实。",
                 },
             ]
         }
@@ -919,11 +991,11 @@ class WorkflowOrchestrator:
         approved_claim_graph: Dict[str, Any],
     ) -> Dict[str, Any]:
         source_count = len(clean_source_list["sources"])
-        core_judgment = "dry-run 已跑通多 agent artifact pipeline；真实调研时需替换为实搜证据。"
+        core_judgment = "多 agent workflow 已从检索结果推进到报告草稿；最终业务结论仍以引用审计通过的证据为准。"
         supporting_reasons = [claim["text"] for claim in approved_claim_graph["claims"]]
         markdown = "\n".join(
             [
-                f"# {intent_brief['research_object']} workflow dry-run report",
+                f"# {intent_brief['research_object']} workflow execution report",
                 "",
                 f"> {core_judgment}",
                 "",
@@ -932,7 +1004,7 @@ class WorkflowOrchestrator:
                 f"2. {supporting_reasons[1]}",
                 "",
                 "## 风险",
-                "dry-run 不代表真实业务结论。",
+                "方法型来源不能单独证明市场事实；缺失关键官方/媒体来源时应补搜后再发布业务结论。",
             ]
         )
         return {
@@ -940,7 +1012,7 @@ class WorkflowOrchestrator:
             "report_family": "Evidence Brief",
             "core_judgment": core_judgment,
             "supporting_reasons": supporting_reasons,
-            "risk_section": "dry-run 不代表真实业务结论。",
+            "risk_section": "方法型来源不能单独证明市场事实；缺失关键官方/媒体来源时应补搜后再发布业务结论。",
             "reference_table": [source["source_id"] for source in clean_source_list["sources"]],
             "source_count": source_count,
         }

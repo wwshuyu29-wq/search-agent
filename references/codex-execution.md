@@ -122,13 +122,19 @@ CLI 的 gate runner 用来验证状态流转；Codex 里的真实调研会用同
 3. 中间调用真实工具，例如 Firecrawl、RSS、agent-reach 或金融/营销 skill，不用占位数据冒充。
 4. 输出写成标准 `SourceListFragment`，下一步可以交给 SourceList Merger 和 Source QA。
 
-第一条已接入的执行链是：
+已接入的执行链包括：
 
 ```text
 SearchPlan task
   -> SourceHunterExecutor
   -> Firecrawl search wrapper（需要 FIRECRAWL_API_KEY）
   -> normalized SourceListFragment
+  -> workflow state file
+
+SearchPlan task
+  -> SourceHunterExecutor
+  -> finance-rss-reader/scripts/rss_fetch.py（不需要 FIRECRAWL_API_KEY）
+  -> normalized SourceListFragment with relevance_score
   -> workflow state file
 ```
 
@@ -138,7 +144,38 @@ SearchPlan task
 python bin/search_agent.py --execute-source-hunter official_source_hunter --state-file search_agent_state.json --limit-per-query 5
 ```
 
+RSS/News Hunter 快速验收命令：
+
+```bash
+SEARCH_AGENT_RSS_MAX_SOURCES=5 python bin/search_agent.py --execute-source-hunter rss_news_hunter --state-file search_agent_state.json --limit-per-query 5
+```
+
+执行全部 Source Hunter：
+
+```bash
+SEARCH_AGENT_RSS_MAX_SOURCES=5 python bin/search_agent.py --execute-source-hunters --state-file search_agent_state.json --limit-per-query 5
+```
+
+继续执行后半段 artifact 链路：
+
+```bash
+python bin/search_agent.py --workflow-continue-from-sources --state-file search_agent_state.json
+```
+
+这一步会把真实 `SourceListFragment` 送入 `SourceList Merger -> Source QA -> Gap Filler -> Framework/Specialist Analysis -> Citation Auditor -> Report Writer -> Humanizer -> IntegrityDiff`。它仍然遵守 gate：如果 Source QA 发现冲突或缺口，会停在 `source_qa_conflict_resolution`。
+
 如果本机没有 `FIRECRAWL_API_KEY`，节点状态会写成 `skipped_missing_tool_config`，并把缺失配置写入 warnings。这样做的原则是宁可明确跳过，也不伪造来源。
+
+当前 Source Hunter 执行路由：
+
+| Node | Real runner | Notes |
+|---|---|---|
+| `official_source_hunter` | Firecrawl wrapper | Primary/original source discovery; requires `FIRECRAWL_API_KEY`. |
+| `media_source_hunter` | Firecrawl wrapper | Deep media/web discovery; requires `FIRECRAWL_API_KEY`. |
+| `rss_news_hunter` | `finance-rss-reader` | RSS/news aggregation with `relevance_score`; independent from Firecrawl key. |
+| `ugc_social_hunter` | `bili` CLI | Bilibili video discussion signal; low confidence until Source QA corroborates. |
+| `finance_data_hunter` | `yfinance_snapshot.py` | Yahoo Finance/yfinance market snapshot; install `requirements.txt`. |
+| `marketing_intelligence_hunter` | marketing skill catalog | Routes to method skills such as `marketing-plan` and `marketing-ideas`; not market evidence by itself. |
 
 需要查看某个 phase 要派发哪些子 Agent 时，导出 node packets：
 
@@ -147,6 +184,14 @@ python bin/search_agent.py --workflow-packets step1_parallel_source_hunting --st
 ```
 
 每个 packet 都包含 node_id、node_name、input_payload、prompt、allowed_tools_or_skills、output_artifact、quality_gate 和 hard_constraints。Codex 可以把这些 packet 作为子 Agent 派发任务；没有多 Agent 工具时，也可以由同一会话逐个执行。
+
+需要查看每个节点能调用哪些 skill/tool、调用方式、输出 artifact 和证据边界：
+
+```bash
+python bin/search_agent.py --skill-registry
+```
+
+注册表把调用分成四类：`llm_method`（Codex 读取 skill 方法并判断）、`script_cli`（执行本地脚本/CLI）、`api_or_mcp`（外部 API/MCP）、`internal`（本项目内部校验/合并/差异检查）。同时用 `evidence_role` 标明产物用途：`market_evidence`、`structured_data` 可以支撑事实 claim；`method_reference` 只能提供方法和结构；`validator`、`style_only` 不能新增事实。
 
 Source QA 如果发现数字冲突、关键证据缺口或来源口径不一致，状态机会停在 `source_qa_conflict_resolution`。用户选择口径或补充来源后，Workflow 才能继续进入 Framework Analyst。
 

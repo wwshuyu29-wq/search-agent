@@ -27,8 +27,12 @@ from intent_classifier import build_step0_context, classify_intent
 from framework_combinator import FrameworkCombinator, recommend_framework_combination
 from search_engine import SearchEngine
 from report_generator import ReportGenerator
-from source_hunter_executor import SourceHunterExecutor
-from workflow_contracts import render_codex_execution_markdown, render_workflow_playbook_markdown
+from source_hunter_executor import HUNTER_CONFIG, SourceHunterExecutor
+from workflow_contracts import (
+    render_codex_execution_markdown,
+    render_skill_invocation_registry_markdown,
+    render_workflow_playbook_markdown,
+)
 from workflow_orchestrator import WorkflowOrchestrator
 
 
@@ -296,6 +300,10 @@ class SearchAgentSkill:
         """Print how the workflow runs inside Codex."""
         print(render_codex_execution_markdown())
 
+    def print_skill_invocation_registry(self):
+        """Print the node-by-node skill invocation registry."""
+        print(render_skill_invocation_registry_markdown())
+
     def run_workflow_dry_run(self, user_query: str):
         """Run the artifact-only multi-agent workflow for validation."""
         orchestrator = WorkflowOrchestrator()
@@ -385,6 +393,16 @@ class SearchAgentSkill:
             print(f"parallel: {packet['parallel']}")
             print(f"output_artifact: {packet['output_artifact']}")
             print(f"allowed_tools_or_skills: {packet['allowed_tools_or_skills']}")
+            print("skill_invocation_rules:")
+            for rule in packet.get("skill_invocation_rules", []):
+                print(
+                    "  - {skill} | type={kind} | evidence_role={role} | can_support_claim={claim}".format(
+                        skill=rule["skill_or_tool"],
+                        kind=rule["invocation_type"],
+                        role=rule["evidence_role"],
+                        claim=rule["can_directly_support_claim"],
+                    )
+                )
             print("\nPrompt:")
             print(packet["prompt"])
         return packets
@@ -432,6 +450,67 @@ class SearchAgentSkill:
             for warning in fragment["warnings"]:
                 print(f"- {warning}")
         return fragment
+
+    def execute_all_source_hunters(
+        self,
+        state_file: str = "search_agent_state.json",
+        limit_per_query: int = 5,
+    ) -> List[Dict]:
+        """Execute every Source Hunter node and persist all fragments."""
+        state = self._read_workflow_state(state_file)
+        artifacts = state.setdefault("artifacts", {})
+        search_plan = artifacts.get("SearchPlan")
+        if not search_plan:
+            raise ValueError("SearchPlan artifact is required before executing Source Hunters")
+
+        executor = SourceHunterExecutor()
+        fragments = []
+        for hunter_id in HUNTER_CONFIG:
+            fragments.append(
+                executor.run_hunter(
+                    hunter_id,
+                    search_plan,
+                    limit_per_query=limit_per_query,
+                )
+            )
+
+        artifacts["SourceListFragment"] = fragments
+        state["current_phase"] = "step1_parallel_source_hunting"
+        state["updated_at"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        self._write_workflow_state(state, state_file)
+
+        print("All Source Hunters Executed")
+        print(f"state_file: {state_file}")
+        for fragment in fragments:
+            print(
+                "- {node_id}: {status}, sources={source_count}, warnings={warning_count}".format(
+                    node_id=fragment["node_id"],
+                    status=fragment["execution_status"],
+                    source_count=len(fragment.get("sources", [])),
+                    warning_count=len(fragment.get("warnings", [])),
+                )
+            )
+        return fragments
+
+    def continue_workflow_from_sources(self, state_file: str = "search_agent_state.json") -> Dict:
+        """Continue the workflow after real Source Hunter fragments are written."""
+        orchestrator = WorkflowOrchestrator()
+        previous_state = self._read_workflow_state(state_file)
+        state = orchestrator.continue_from_source_fragments(previous_state)
+        self._write_workflow_state(state, state_file)
+
+        print("Workflow Continued From Source Fragments")
+        print(f"status: {state['status']}")
+        print(f"pending_gate: {state['pending_gate']}")
+        print(f"state_file: {state_file}")
+        raw_source_list = state["artifacts"].get("RawSourceList", {})
+        print(f"raw_sources: {raw_source_list.get('source_count', 0)}")
+        final_report = state["artifacts"].get("FinalReport", {})
+        if final_report.get("markdown"):
+            print("\nFinalReport:")
+            print(final_report["markdown"])
+        print(f"\n下一步: {state['next_action']}")
+        return state
 
     def _write_workflow_state(self, state: Dict, state_file: str):
         with open(state_file, "w", encoding="utf-8") as file:
@@ -631,11 +710,14 @@ def main():
     parser.add_argument("query", type=str, nargs="?", help="用户问题")
     parser.add_argument("--auto", action="store_true", help="自动确认框架,跳过人工审核")
     parser.add_argument("--workflow-playbook", action="store_true", help="输出完整子 agent 推进手册")
+    parser.add_argument("--skill-registry", action="store_true", help="输出每个节点可调用 skill/tool 的注册表")
     parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
     parser.add_argument("--workflow-resume", type=str, help="根据用户确认/修订意见恢复 gate-driven workflow")
     parser.add_argument("--workflow-packets", type=str, help="输出某个 phase 的可派发子 agent packet")
     parser.add_argument("--execute-source-hunter", type=str, help="执行指定 Source Hunter 节点并写回 SourceListFragment")
+    parser.add_argument("--execute-source-hunters", action="store_true", help="执行全部 Source Hunter 节点并写回 SourceListFragment")
+    parser.add_argument("--workflow-continue-from-sources", action="store_true", help="从真实 SourceListFragment 继续合并、QA、分析和报告")
     parser.add_argument("--limit-per-query", type=int, default=5, help="每个检索任务最多返回多少条结果")
     parser.add_argument("--state-file", default="search_agent_state.json", help="gate-driven workflow 状态文件路径")
     parser.add_argument("--codex-execution", action="store_true", help="输出 Codex 内 LLM 调用与团队安装执行模型")
@@ -645,6 +727,10 @@ def main():
     agent = SearchAgentSkill()
     if args.workflow_playbook:
         agent.print_workflow_playbook()
+        return
+
+    if args.skill_registry:
+        agent.print_skill_invocation_registry()
         return
 
     if args.codex_execution:
@@ -677,6 +763,17 @@ def main():
             state_file=args.state_file,
             limit_per_query=args.limit_per_query,
         )
+        return
+
+    if args.execute_source_hunters:
+        agent.execute_all_source_hunters(
+            state_file=args.state_file,
+            limit_per_query=args.limit_per_query,
+        )
+        return
+
+    if args.workflow_continue_from_sources:
+        agent.continue_workflow_from_sources(state_file=args.state_file)
         return
 
     if not args.query:

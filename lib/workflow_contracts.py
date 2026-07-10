@@ -938,6 +938,270 @@ SKILL_CHAINS: Dict[str, Dict[str, Any]] = {
 }
 
 
+SKILL_INVOCATION_REGISTRY: List[Dict[str, Any]] = [
+    {
+        "id": "intent_router.marketing_preflight",
+        "node_id": "intent_router",
+        "skill_or_tool": "marketing-ideas / marketing-plan / yfinance-data / funda-data",
+        "invocation_type": "llm_method",
+        "trigger": "The user intent touches growth, marketing planning, finance, startup, or a single financial number.",
+        "input_artifact": "RawUserQuery + available skills",
+        "output_artifact": "IntentBrief + AuditCard",
+        "evidence_role": "routing",
+        "can_directly_support_claim": False,
+        "required_setup": "Installed skill files; data skills may also require Python package/API setup later.",
+        "artifact_policy": "List triggered expert skills and why in AuditCard; do not treat Step 0 probes as final evidence.",
+    },
+    {
+        "id": "search_planner.framework_keywords",
+        "node_id": "search_planner",
+        "skill_or_tool": "framework templates + competitor-profiling/customer-research methods",
+        "invocation_type": "llm_method",
+        "trigger": "After AuditCard is confirmed and dimensions must become evidence tasks.",
+        "input_artifact": "AuditCard",
+        "output_artifact": "SearchPlan",
+        "evidence_role": "routing",
+        "can_directly_support_claim": False,
+        "required_setup": "Local framework and marketing skill documents.",
+        "artifact_policy": "Output task-level source_layers, expected_evidence, language, and assigned_hunter.",
+    },
+    {
+        "id": "official_source_hunter.firecrawl",
+        "node_id": "official_source_hunter",
+        "skill_or_tool": "Firecrawl",
+        "invocation_type": "script_cli",
+        "trigger": "SearchPlan task assigned to official_source_hunter or source_layers contains official.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "market_evidence",
+        "can_directly_support_claim": True,
+        "required_setup": "FIRECRAWL_API_KEY.",
+        "artifact_policy": "OFF### rows must preserve URL, publisher, date, key_facts, and confidence_rationale.",
+    },
+    {
+        "id": "media_source_hunter.firecrawl",
+        "node_id": "media_source_hunter",
+        "skill_or_tool": "Firecrawl",
+        "invocation_type": "script_cli",
+        "trigger": "SearchPlan task assigned to media_source_hunter or source_layers contains media/deep_analysis.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "market_evidence",
+        "can_directly_support_claim": True,
+        "required_setup": "FIRECRAWL_API_KEY.",
+        "artifact_policy": "MED### rows must distinguish reported fact from interpretation and paywall summaries.",
+    },
+    {
+        "id": "rss_news_hunter.finance_rss_reader",
+        "node_id": "rss_news_hunter",
+        "skill_or_tool": "finance-rss-reader",
+        "invocation_type": "script_cli",
+        "trigger": "SearchPlan task assigned to rss_news_hunter or source_layers contains rss/news.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "market_evidence",
+        "can_directly_support_claim": True,
+        "required_setup": "Local finance-rss-reader script; optional SEARCH_AGENT_RSS_* env vars.",
+        "artifact_policy": "RSS### rows must carry relevance_score; RSS is a signal layer and may need stronger corroboration.",
+    },
+    {
+        "id": "ugc_social_hunter.bili_cli",
+        "node_id": "ugc_social_hunter",
+        "skill_or_tool": "agent-reach / bili CLI",
+        "invocation_type": "script_cli",
+        "trigger": "SearchPlan task assigned to ugc_social_hunter or source_layers contains ugc/social/video.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "market_evidence",
+        "can_directly_support_claim": True,
+        "required_setup": "bili CLI for current vertical slice; agent-reach/opencli for expanded platforms.",
+        "artifact_policy": "UGC### rows default to low confidence and cannot be generalized without corroboration.",
+    },
+    {
+        "id": "finance_data_hunter.yfinance",
+        "node_id": "finance_data_hunter",
+        "skill_or_tool": "yfinance-data",
+        "invocation_type": "script_cli",
+        "trigger": "SearchPlan task assigned to finance_data_hunter, ticker query, or source_layers contains finance_data.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "structured_data",
+        "can_directly_support_claim": True,
+        "required_setup": "pip install -r requirements.txt; yfinance network access.",
+        "artifact_policy": "FIN### rows must include metric period/currency when available; missing metrics go to Source QA.",
+    },
+    {
+        "id": "marketing_intelligence_hunter.skill_catalog",
+        "node_id": "marketing_intelligence_hunter",
+        "skill_or_tool": "marketing-skills-catalog",
+        "invocation_type": "llm_method",
+        "trigger": "SearchPlan task assigned to marketing_intelligence_hunter or source_layers contains marketing_intelligence.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "Local vendor/marketing skill files.",
+        "artifact_policy": "MKT### rows are method sources, not market facts; later claims still need evidence source_ids.",
+    },
+    {
+        "id": "marketing_intelligence_hunter.marketing_plan",
+        "node_id": "marketing_intelligence_hunter",
+        "skill_or_tool": "marketing-plan",
+        "invocation_type": "llm_method",
+        "trigger": "The task asks for GTM, growth plan, campaign roadmap, AARRR, or marketing operating plan.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "vendor/marketing/skills/marketing-plan/SKILL.md.",
+        "artifact_policy": "Use as planning method and structure only; do not cite as evidence that a market fact is true.",
+    },
+    {
+        "id": "marketing_intelligence_hunter.marketing_ideas",
+        "node_id": "marketing_intelligence_hunter",
+        "skill_or_tool": "marketing-ideas",
+        "invocation_type": "llm_method",
+        "trigger": "The task asks for marketing ideas, growth directions, creative options, acquisition, retention, or referral tactics.",
+        "input_artifact": "SearchPlan",
+        "output_artifact": "SourceListFragment",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "vendor/marketing/skills/marketing-ideas/SKILL.md.",
+        "artifact_policy": "Use to generate/organize options; every recommended action still needs segment/channel/metric logic and evidence.",
+    },
+    {
+        "id": "source_list_merger.internal_dedupe",
+        "node_id": "source_list_merger",
+        "skill_or_tool": "URL canonicalizer + schema validator",
+        "invocation_type": "internal",
+        "trigger": "All available SourceListFragment rows are ready or explicitly skipped.",
+        "input_artifact": "SourceListFragment",
+        "output_artifact": "RawSourceList + MergerLog",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "None.",
+        "artifact_policy": "Do not create facts; preserve channel provenance and duplicate decisions.",
+    },
+    {
+        "id": "source_qa.internal_quality",
+        "node_id": "source_qa",
+        "skill_or_tool": "URL normalization + duplicate/date/numeric checks",
+        "invocation_type": "internal",
+        "trigger": "RawSourceList is produced.",
+        "input_artifact": "RawSourceList + SearchPlan",
+        "output_artifact": "SourceQANotes + ConflictRegister + GapList + CleanSourceList",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "None.",
+        "artifact_policy": "Approve, downgrade, exclude, or pause; do not analyze unsupported sources.",
+    },
+    {
+        "id": "gap_filler.refetch",
+        "node_id": "gap_filler",
+        "skill_or_tool": "Firecrawl / finance skill / official search",
+        "invocation_type": "script_cli",
+        "trigger": "Source QA produces blocking GapList or ConflictRegister.",
+        "input_artifact": "GapList + ConflictRegister",
+        "output_artifact": "SupplementalSourceList + RefetchNotes",
+        "evidence_role": "market_evidence",
+        "can_directly_support_claim": True,
+        "required_setup": "Depends on the gap: Firecrawl key, finance dependencies, or platform CLI.",
+        "artifact_policy": "Only fill listed gaps/conflicts; tie every new source to gap_id or conflict_id.",
+    },
+    {
+        "id": "framework_analyst.frameworks",
+        "node_id": "framework_analyst",
+        "skill_or_tool": "framework definitions + finance/marketing specialist notes",
+        "invocation_type": "llm_method",
+        "trigger": "CleanSourceList is available and framework dimensions are confirmed.",
+        "input_artifact": "CleanSourceList + confirmed framework dimensions",
+        "output_artifact": "ClaimGraph",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "Local framework definitions.",
+        "artifact_policy": "Every claim must cite approved source_ids and label fact/calculation/assumption/judgment.",
+    },
+    {
+        "id": "finance_specialist.finance_skills",
+        "node_id": "finance_specialist",
+        "skill_or_tool": "yfinance-data / funda-data / earnings-recap / company-valuation",
+        "invocation_type": "api_or_mcp",
+        "trigger": "ClaimGraph or user question contains financial metrics, filings, valuation, or market data.",
+        "input_artifact": "CleanSourceList + finance questions from ClaimGraph",
+        "output_artifact": "SpecialistNotes + ClaimGraphPatch",
+        "evidence_role": "structured_data",
+        "can_directly_support_claim": True,
+        "required_setup": "yfinance dependencies and optional FUNDA_API_KEY/Funda MCP.",
+        "artifact_policy": "Append only sourced finance claims with period, currency, metric definition, and assumptions.",
+    },
+    {
+        "id": "marketing_specialist.marketing_skills",
+        "node_id": "marketing_specialist",
+        "skill_or_tool": "marketing-ideas / marketing-plan / product-marketing / customer-research",
+        "invocation_type": "llm_method",
+        "trigger": "ClaimGraph needs positioning, funnel, channel, customer, or growth interpretation.",
+        "input_artifact": "CleanSourceList + marketing/growth questions from ClaimGraph",
+        "output_artifact": "SpecialistNotes + ClaimGraphPatch",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "Local marketing skill files.",
+        "artifact_policy": "Marketing methods shape recommendations; factual market claims still need CleanSourceList source_ids.",
+    },
+    {
+        "id": "citation_auditor.internal_citations",
+        "node_id": "citation_auditor",
+        "skill_or_tool": "source_id existence checks + claim-source comparison",
+        "invocation_type": "internal",
+        "trigger": "ClaimGraph and specialist patches are ready.",
+        "input_artifact": "ClaimGraph + ClaimGraphPatch + SpecialistNotes + CleanSourceList",
+        "output_artifact": "CitationAudit + ApprovedClaimGraph",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "None.",
+        "artifact_policy": "Block unsupported claims; rewrite or remove claims whose citations do not prove them.",
+    },
+    {
+        "id": "report_writer.report_family",
+        "node_id": "report_writer",
+        "skill_or_tool": "report family selector + build-report/marketing-plan where applicable",
+        "invocation_type": "llm_method",
+        "trigger": "ApprovedClaimGraph and CitationAudit pass.",
+        "input_artifact": "ApprovedClaimGraph + CitationAudit + CleanSourceList + IntentBrief",
+        "output_artifact": "ReportDraft",
+        "evidence_role": "method_reference",
+        "can_directly_support_claim": False,
+        "required_setup": "Local report family definitions and optional data analytics/reporting skills.",
+        "artifact_policy": "Report structure can change; facts, source_ids, confidence, and risk boundaries cannot be invented.",
+    },
+    {
+        "id": "humanizer_editor.humanizer_zh",
+        "node_id": "humanizer_editor",
+        "skill_or_tool": "humanizer-zh / copy-editing",
+        "invocation_type": "llm_method",
+        "trigger": "ReportDraft exists and citations are preserved.",
+        "input_artifact": "ReportDraft + CleanSourceList",
+        "output_artifact": "FinalReport + HumanizerChangeLog",
+        "evidence_role": "style_only",
+        "can_directly_support_claim": False,
+        "required_setup": "Installed humanizer/copy-editing skills.",
+        "artifact_policy": "Style-only edits; do not change numbers, source_ids, dates, confidence, or factual meaning.",
+    },
+    {
+        "id": "integrity_diff_checker.internal_diff",
+        "node_id": "integrity_diff_checker",
+        "skill_or_tool": "local diff + regex extraction + schema validator",
+        "invocation_type": "internal",
+        "trigger": "FinalReport and HumanizerChangeLog are produced.",
+        "input_artifact": "ReportDraft + FinalReport + HumanizerChangeLog",
+        "output_artifact": "IntegrityDiff",
+        "evidence_role": "validator",
+        "can_directly_support_claim": False,
+        "required_setup": "None.",
+        "artifact_policy": "Block final review if evidence-bearing tokens changed after humanizer.",
+    },
+]
+
+
 RSS_RELEVANCE_CONTRACT = {
     "candidate_threshold": 0.4,
     "full_text_threshold": 0.6,
@@ -1089,6 +1353,22 @@ def build_agent_prompt(node_id: str) -> str:
     for item in _as_list(node["tool_or_skill_use"]):
         lines.append(f"- {item}")
 
+    skill_rules = get_skill_invocations_for_node(node_id)
+    if skill_rules:
+        lines.extend(["", "## Skill Invocation Rules"])
+        for rule in skill_rules:
+            lines.append(
+                "- {skill} ({kind}, {role}): trigger={trigger}; output={output}; can_support_claim={claim}; policy={policy}".format(
+                    skill=rule["skill_or_tool"],
+                    kind=rule["invocation_type"],
+                    role=rule["evidence_role"],
+                    trigger=rule["trigger"],
+                    output=rule["output_artifact"],
+                    claim=rule["can_directly_support_claim"],
+                    policy=rule["artifact_policy"],
+                )
+            )
+
     lines.extend(["", "## Output Artifact", str(node["output_artifact"]), ""])
 
     if output_artifacts:
@@ -1160,11 +1440,50 @@ def render_workflow_playbook_markdown() -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_skill_invocation_registry_markdown() -> str:
+    """Render the node-by-node skill invocation registry."""
+    lines = [
+        "# Skill Invocation Registry",
+        "",
+        "这张表说明每个节点可以调用哪些 skill/tool、怎么调用、产出什么 artifact，以及产物能不能直接支撑事实结论。",
+        "",
+        "| Node | Skill/Tool | Type | Evidence Role | Can Support Claim | Output | Policy |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for entry in SKILL_INVOCATION_REGISTRY:
+        lines.append(
+            "| {node} | `{skill}` | {kind} | {role} | {claim} | {output} | {policy} |".format(
+                node=entry["node_id"],
+                skill=entry["skill_or_tool"],
+                kind=entry["invocation_type"],
+                role=entry["evidence_role"],
+                claim="yes" if entry["can_directly_support_claim"] else "no",
+                output=entry["output_artifact"],
+                policy=entry["artifact_policy"].replace("|", "/"),
+            )
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def get_skill_chain(domain: str) -> Dict[str, Any]:
     """Return the skill chain for a domain."""
     if domain not in SKILL_CHAINS:
         raise KeyError(f"Unknown skill chain: {domain}")
     return deepcopy(SKILL_CHAINS[domain])
+
+
+def get_skill_invocation_registry() -> List[Dict[str, Any]]:
+    """Return the executable skill/tool invocation registry."""
+    return deepcopy(SKILL_INVOCATION_REGISTRY)
+
+
+def get_skill_invocations_for_node(node_id: str) -> List[Dict[str, Any]]:
+    """Return invocation rules for one workflow node."""
+    return [
+        deepcopy(entry)
+        for entry in SKILL_INVOCATION_REGISTRY
+        if entry["node_id"] == node_id
+    ]
 
 
 def get_rss_relevance_contract() -> Dict[str, Any]:

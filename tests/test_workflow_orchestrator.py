@@ -336,6 +336,47 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertIn("FinalReport", resumed["artifacts"])
         self.assertIn("采用官方口径", resumed["artifacts"]["SourceQANotes"]["user_resolution"])
 
+    def test_continue_from_source_fragments_runs_merge_qa_and_report(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow(
+            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
+        )
+        state["artifacts"]["SearchPlan"] = orchestrator._build_dry_search_plan(state["artifacts"]["AuditCard"])
+        state["artifacts"]["SourceListFragment"] = [
+            {
+                "node_id": "rss_news_hunter",
+                "execution_status": "completed",
+                "task_ids": ["RSS001"],
+                "warnings": [],
+                "sources": [
+                    {
+                        "source_id": "RSS001",
+                        "title": "高德地图新功能报道",
+                        "publisher": "示例媒体",
+                        "source_type": "rss_news",
+                        "publish_date": "2026-07-10",
+                        "url": "https://example.com/amap",
+                        "canonical_url": "https://example.com/amap",
+                        "confidence": "medium",
+                        "key_facts": ["高德地图上线新功能。"],
+                        "full_text_fetched": False,
+                        "collected_by": "RSS/News Hunter",
+                        "confidence_rationale": "test source",
+                    }
+                ],
+            }
+        ]
+
+        continued = orchestrator.continue_from_source_fragments(state)
+
+        self.assertEqual(continued["pending_gate"], "final_report_review")
+        self.assertEqual(continued["artifacts"]["RawSourceList"]["source_count"], 1)
+        self.assertIn("CleanSourceList", continued["artifacts"])
+        self.assertIn("FinalReport", continued["artifacts"])
+        self.assertIn("workflow execution report", continued["artifacts"]["FinalReport"]["markdown"])
+
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
@@ -357,6 +398,9 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertIn("## Hard Constraints", packets[0]["prompt"])
         self.assertIn("output_artifact", packets[0])
         self.assertIn("allowed_tools_or_skills", packets[0])
+        self.assertIn("skill_invocation_rules", packets[0])
+        self.assertTrue(packets[0]["skill_invocation_rules"])
+        self.assertEqual(packets[0]["skill_invocation_rules"][0]["node_id"], packets[0]["node_id"])
 
 
 if __name__ == "__main__":

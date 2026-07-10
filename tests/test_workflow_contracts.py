@@ -65,6 +65,54 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("financial metric", " -> ".join(mixed["logic"]))
         self.assertIn("no direct jump from buzz to stock price", mixed["hard_constraints"][0])
 
+    def test_skill_invocation_registry_covers_nodes_and_evidence_roles(self):
+        from workflow_contracts import (
+            get_node_contracts,
+            get_skill_invocation_registry,
+            get_skill_invocations_for_node,
+            render_skill_invocation_registry_markdown,
+        )
+
+        registry = get_skill_invocation_registry()
+        node_ids = {node["id"] for node in get_node_contracts()}
+        covered_nodes = {entry["node_id"] for entry in registry}
+
+        self.assertTrue(node_ids.issubset(covered_nodes))
+        for entry in registry:
+            with self.subTest(entry=entry["id"]):
+                self.assertIn(entry["node_id"], node_ids)
+                self.assertTrue(entry["skill_or_tool"])
+                self.assertIn(entry["invocation_type"], {"llm_method", "script_cli", "api_or_mcp", "internal"})
+                self.assertIn(
+                    entry["evidence_role"],
+                    {"routing", "market_evidence", "structured_data", "method_reference", "validator", "style_only"},
+                )
+                self.assertTrue(entry["input_artifact"])
+                self.assertTrue(entry["output_artifact"])
+                self.assertTrue(entry["artifact_policy"])
+
+        rss = get_skill_invocations_for_node("rss_news_hunter")
+        self.assertTrue(any(item["skill_or_tool"] == "finance-rss-reader" for item in rss))
+        self.assertTrue(any(item["invocation_type"] == "script_cli" for item in rss))
+
+        finance = get_skill_invocations_for_node("finance_data_hunter")
+        self.assertTrue(any(item["skill_or_tool"] == "yfinance-data" for item in finance))
+        self.assertTrue(any(item["evidence_role"] == "structured_data" for item in finance))
+
+        marketing = get_skill_invocations_for_node("marketing_intelligence_hunter")
+        method_entries = [item for item in marketing if item["skill_or_tool"] in {"marketing-plan", "marketing-ideas"}]
+        self.assertTrue(method_entries)
+        self.assertFalse(any(item["can_directly_support_claim"] for item in method_entries))
+
+        humanizer = get_skill_invocations_for_node("humanizer_editor")
+        self.assertTrue(any(item["evidence_role"] == "style_only" for item in humanizer))
+
+        markdown = render_skill_invocation_registry_markdown()
+        self.assertIn("# Skill Invocation Registry", markdown)
+        self.assertIn("marketing_intelligence_hunter", markdown)
+        self.assertIn("method_reference", markdown)
+        self.assertIn("Can Support Claim", markdown)
+
     def test_rss_relevance_threshold_contract_explains_0_6_as_fetch_gate(self):
         from workflow_contracts import get_rss_relevance_contract
 
@@ -154,6 +202,8 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("SourceQANotes", prompt)
         self.assertIn("CleanSourceList", prompt)
         self.assertIn("Do not analyze from stale or duplicate sources", prompt)
+        self.assertIn("Skill Invocation Rules", prompt)
+        self.assertIn("validator", prompt)
 
     def test_orchestration_plan_groups_parallel_source_hunters_and_citation_gate(self):
         from workflow_contracts import get_orchestration_plan

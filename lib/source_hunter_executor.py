@@ -9,6 +9,7 @@ default runner uses the local Firecrawl wrapper only when its key is configured.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -99,7 +100,7 @@ class SourceHunterExecutor:
             fragment["execution_status"] = "skipped_no_matching_tasks"
             return fragment
 
-        runner = self.search_runner or self._firecrawl_runner
+        runner = self.search_runner or self._runner_for_hunter(hunter_id)
         source_index = 1
         for task in tasks:
             for query, lang in self._queries_for_task(task, config):
@@ -121,6 +122,17 @@ class SourceHunterExecutor:
                     source_index += 1
 
         return fragment
+
+    def _runner_for_hunter(self, hunter_id: str) -> SearchRunner:
+        if hunter_id == "rss_news_hunter":
+            return self._rss_runner
+        if hunter_id == "finance_data_hunter":
+            return self._finance_runner
+        if hunter_id == "ugc_social_hunter":
+            return self._ugc_runner
+        if hunter_id == "marketing_intelligence_hunter":
+            return self._marketing_skill_runner
+        return self._firecrawl_runner
 
     def _firecrawl_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
         if not self.env.get("FIRECRAWL_API_KEY"):
@@ -147,6 +159,190 @@ class SourceHunterExecutor:
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "firecrawl_search.py failed")
         return json.loads(completed.stdout or "[]")
+
+    def _rss_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
+        script = self.repo_root / "lib" / "finance-rss-reader" / "scripts" / "rss_fetch.py"
+        sources_config = (
+            self.repo_root
+            / "lib"
+            / "finance-rss-reader"
+            / "references"
+            / "rss_sources.json"
+        )
+        if not script.exists():
+            raise MissingToolConfig(f"finance-rss-reader script not found: {script}")
+        if not sources_config.exists():
+            raise MissingToolConfig(f"RSS sources config not found: {sources_config}")
+
+        command = [
+            sys.executable,
+            str(script),
+            "--keywords",
+            self._rss_keywords_arg(query),
+            "--ticker",
+            "",
+            "--days",
+            str(self.env.get("SEARCH_AGENT_RSS_DAYS", "14")),
+            "--sources-config",
+            str(sources_config),
+            "--min-score",
+            str(self.env.get("SEARCH_AGENT_RSS_MIN_SCORE", "0.4")),
+        ]
+        if self.env.get("SEARCH_AGENT_RSS_MAX_SOURCES"):
+            command.extend(["--max-sources", str(self.env["SEARCH_AGENT_RSS_MAX_SOURCES"])])
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(completed.stderr.strip() or "rss_fetch.py failed")
+        results = json.loads(completed.stdout or "[]")
+        return results[:limit]
+
+    def _ugc_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
+        bili_path = shutil.which("bili")
+        if not bili_path:
+            raise MissingToolConfig("bili CLI is required for ugc_social_hunter Bilibili retrieval")
+
+        command = [
+            bili_path,
+            "search",
+            query,
+            "--type",
+            "video",
+            "-n",
+            str(limit),
+            "--json",
+        ]
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(completed.stderr.strip() or "bili search failed")
+        payload = json.loads(completed.stdout or "{}")
+        records = payload.get("data", []) if isinstance(payload, dict) else payload
+        results = []
+        for record in records[:limit]:
+            bvid = record.get("bvid") or record.get("id") or ""
+            url = f"https://www.bilibili.com/video/{bvid}" if bvid else ""
+            author = record.get("author") or "unknown author"
+            play = record.get("play")
+            duration = record.get("duration")
+            summary_parts = [f"author: {author}"]
+            if play is not None:
+                summary_parts.append(f"play: {play}")
+            if duration:
+                summary_parts.append(f"duration: {duration}")
+            results.append(
+                {
+                    "title": record.get("title", ""),
+                    "url": url,
+                    "summary": "; ".join(summary_parts),
+                    "source": "Bilibili",
+                    "confidence": "low",
+                    "full_text_fetched": False,
+                    "fetcher": "bili-cli",
+                }
+            )
+        return results
+
+    def _marketing_skill_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
+        skill_specs = [
+            {
+                "skill": "marketing-plan",
+                "path": self.repo_root / "vendor" / "marketing" / "skills" / "marketing-plan" / "SKILL.md",
+                "triggers": {"营销方案", "增长", "gtm", "go-to-market", "aarrr", "计划", "roadmap"},
+                "summary": "Builds AARRR marketing plans, 90-day roadmap, 12-month outlook, measurement, RACI, and skill/tool mapping.",
+            },
+            {
+                "skill": "marketing-ideas",
+                "path": self.repo_root / "vendor" / "marketing" / "skills" / "marketing-ideas" / "SKILL.md",
+                "triggers": {"想法", "创意", "增长", "ideas", "idea", "获客", "推广"},
+                "summary": "Provides tactical marketing ideas that can be mapped to funnel stage and execution constraints.",
+            },
+            {
+                "skill": "competitor-profiling",
+                "path": self.repo_root / "vendor" / "marketing" / "skills" / "competitor-profiling" / "SKILL.md",
+                "triggers": {"竞品", "竞争", "competitor", "competitive", "对手", "profiling"},
+                "summary": "Profiles competitor positioning, pages, pricing, SEO, reviews, and comparable market evidence.",
+            },
+            {
+                "skill": "customer-research",
+                "path": self.repo_root / "vendor" / "marketing" / "skills" / "customer-research" / "SKILL.md",
+                "triggers": {"用户", "客户", "人群", "痛点", "需求", "customer", "icp"},
+                "summary": "Structures customer/ICP research, pain points, buying triggers, and segment evidence needs.",
+            },
+            {
+                "skill": "product-marketing",
+                "path": self.repo_root / "vendor" / "marketing" / "skills" / "product-marketing" / "SKILL.md",
+                "triggers": {"定位", "stp", "positioning", "产品营销", "卖点", "messaging"},
+                "summary": "Supports positioning, ICP, messaging, category claim, and product marketing context.",
+            },
+        ]
+        normalized_query = query.lower()
+        selected = []
+        for spec in skill_specs:
+            trigger_hit = any(trigger.lower() in normalized_query for trigger in spec["triggers"])
+            if trigger_hit or spec["skill"] in {"marketing-plan", "marketing-ideas"}:
+                selected.append(spec)
+        if not selected:
+            selected = skill_specs[:2]
+
+        results = []
+        for spec in selected[:limit]:
+            path = spec["path"]
+            if not path.exists():
+                continue
+            results.append(
+                {
+                    "title": f"{spec['skill']} skill routing",
+                    "url": str(path),
+                    "summary": spec["summary"],
+                    "source": "local marketing skill",
+                    "confidence": "medium",
+                    "full_text_fetched": True,
+                    "method_source": True,
+                    "fetcher": "marketing-skills-catalog",
+                }
+            )
+        return results
+
+
+    def _finance_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
+        ticker = self._ticker_from_query(query)
+        if not ticker:
+            raise MissingToolConfig("finance_data_hunter requires a ticker symbol in query_en or task metadata")
+
+        script = self.repo_root / "scripts" / "yfinance_snapshot.py"
+        if not script.exists():
+            raise MissingToolConfig(f"yfinance snapshot script not found: {script}")
+
+        command = [
+            sys.executable,
+            str(script),
+            "--ticker",
+            ticker,
+        ]
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
+        )
+        if completed.returncode == 3 or "YFINANCE_NOT_INSTALLED" in completed.stderr:
+            raise MissingToolConfig("yfinance is required for finance_data_hunter; install requirements first")
+        if completed.returncode != 0:
+            raise RuntimeError(completed.stderr.strip() or "yfinance_snapshot.py failed")
+        results = json.loads(completed.stdout or "[]")
+        return results[:limit]
 
     def _matching_tasks(self, hunter_id: str, tasks: List[Dict[str, Any]], config: Dict[str, Any]):
         matching = []
@@ -180,23 +376,36 @@ class SourceHunterExecutor:
         index: int,
     ) -> Dict[str, Any]:
         url = result.get("url", "")
-        description = result.get("description") or result.get("snippet") or ""
+        description = result.get("description") or result.get("snippet") or result.get("summary") or ""
+        publisher = result.get("source") or result.get("publisher") or self._publisher_from_url(url)
+        fetcher = result.get("fetcher")
+        retrieval_tool = self._retrieval_tool_for(config["source_type"])
+        rationale_bits = [
+            f"Search runner result for task {task.get('task_id', '')}",
+            "requires Source QA before analysis",
+        ]
+        if fetcher:
+            rationale_bits.append(f"fetcher={fetcher}")
+        if result.get("method_source"):
+            rationale_bits.append("method source, not market evidence")
+        if result.get("relevance_score") is not None:
+            rationale_bits.append(f"relevance_score={result['relevance_score']}")
         return {
             "source_id": f"{config['prefix']}{index:03d}",
             "title": result.get("title", ""),
-            "publisher": self._publisher_from_url(url),
+            "publisher": publisher,
             "source_type": config["source_type"],
-            "publish_date": result.get("publish_date") or result.get("publishedDate") or "",
+            "publish_date": result.get("publish_date") or result.get("publishedDate") or result.get("published") or "",
             "url": url,
             "canonical_url": self._canonical_url(url),
             "confidence": result.get("confidence") or "medium",
             "key_facts": [description] if description else [],
             "full_text_fetched": bool(result.get("full_text_fetched", False)),
             "collected_by": config["collector"],
-            "confidence_rationale": (
-                f"Search runner result for task {task.get('task_id', '')}; "
-                f"requires Source QA before analysis."
-            ),
+            "confidence_rationale": "; ".join(rationale_bits) + ".",
+            "retrieval_tool": retrieval_tool,
+            "relevance_score": result.get("relevance_score"),
+            "metrics": result.get("metrics"),
         }
 
     def _canonical_url(self, url: str) -> str:
@@ -220,6 +429,24 @@ class SourceHunterExecutor:
 
     def _publisher_from_url(self, url: str) -> str:
         return urlsplit(url).netloc.lower() or "unknown"
+
+    def _rss_keywords_arg(self, query: str) -> str:
+        return ",".join(part for part in query.split() if part)
+
+    def _ticker_from_query(self, query: str) -> str:
+        for token in query.replace("(", " ").replace(")", " ").replace(",", " ").split():
+            cleaned = "".join(char for char in token if char.isalnum() or char in {".", "-"})
+            if cleaned.isupper() and 1 <= len(cleaned) <= 8 and any(char.isalpha() for char in cleaned):
+                return cleaned
+        return ""
+
+    def _retrieval_tool_for(self, source_type: str) -> str:
+        return {
+            "rss_news": "finance-rss-reader",
+            "finance_data": "yfinance-data",
+            "ugc_social": "bili-cli",
+            "marketing_intelligence": "marketing-skills-catalog",
+        }.get(source_type, "firecrawl")
 
     def _config_for(self, hunter_id: str) -> Dict[str, Any]:
         if hunter_id not in HUNTER_CONFIG:
