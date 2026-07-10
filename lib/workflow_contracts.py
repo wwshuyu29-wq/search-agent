@@ -347,6 +347,118 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
 ]
 
 
+NODE_BOUNDARIES: Dict[str, Dict[str, Any]] = {
+    "intent_router": {
+        "responsibility_boundary": "Only frames the user's business decision and proposed workflow route before any search.",
+        "may_do": ["Extract decision context", "recommend frameworks", "list expert skills", "produce AuditCard"],
+        "must_not_do": ["Search sources", "write findings", "skip user confirmation"],
+        "handoff_to": "Search Planner after audit_card_confirmed.",
+    },
+    "search_planner": {
+        "responsibility_boundary": "Only turns the confirmed AuditCard into source-specific search tasks.",
+        "may_do": ["Create query families", "assign hunters", "define expected evidence", "set source_id prefixes"],
+        "must_not_do": ["Fetch sources", "analyze evidence", "change confirmed framework without user input"],
+        "handoff_to": "Parallel Source Hunter nodes.",
+    },
+    "official_source_hunter": {
+        "responsibility_boundary": "Only collects primary/original sources for confirmed tasks.",
+        "may_do": ["Search official sites", "fetch original pages", "normalize OFF### rows"],
+        "must_not_do": ["Use media as official proof", "interpret strategy", "invent missing dates"],
+        "handoff_to": "SourceList Merger.",
+    },
+    "media_source_hunter": {
+        "responsibility_boundary": "Only collects secondary reporting and separates fact from framing.",
+        "may_do": ["Search media", "fetch article text", "label fact/interpretation/opinion"],
+        "must_not_do": ["Let media override official facts", "treat commentary as proof", "hide paywall limits"],
+        "handoff_to": "SourceList Merger.",
+    },
+    "rss_news_hunter": {
+        "responsibility_boundary": "Only collects timely RSS/news signals and relevance-gates them.",
+        "may_do": ["Scan RSS", "score relevance", "route high-signal items for stronger verification"],
+        "must_not_do": ["Treat relevance_score as truth", "prove exact launch facts from RSS alone", "skip stronger sources"],
+        "handoff_to": "SourceList Merger.",
+    },
+    "ugc_social_hunter": {
+        "responsibility_boundary": "Only collects public UGC/social signals as sentiment or adoption evidence.",
+        "may_do": ["Search B站/social platforms", "record public URLs", "summarize sentiment patterns"],
+        "must_not_do": ["Generalize anecdotes into market facts", "collect private identifiers", "treat UGC as official evidence"],
+        "handoff_to": "SourceList Merger and Source QA for confidence downgrading.",
+    },
+    "finance_data_hunter": {
+        "responsibility_boundary": "Only collects structured finance/data rows when the task truly needs them.",
+        "may_do": ["Fetch yfinance snapshots", "route setup-aware finance adapters", "emit FIN### rows"],
+        "must_not_do": ["Run finance tools for non-finance map marketing tasks", "give investment advice", "treat sentiment as performance"],
+        "handoff_to": "SourceList Merger.",
+    },
+    "marketing_intelligence_hunter": {
+        "responsibility_boundary": "Only routes marketing method skills and source-discovery hints; it is not market proof by itself.",
+        "may_do": ["Select fine-grained marketing skills", "emit method-source rows", "identify source needs"],
+        "must_not_do": ["Convert generic marketing advice into findings", "add unsupported recommendations", "replace external evidence"],
+        "handoff_to": "SourceList Merger and Marketing Specialist.",
+    },
+    "source_list_merger": {
+        "responsibility_boundary": "Only merges and dedupes source fragments without adding meaning.",
+        "may_do": ["Canonicalize URLs", "merge duplicates", "preserve provenance", "write MergerLog"],
+        "must_not_do": ["Create facts", "drop provenance", "rank claims"],
+        "handoff_to": "Source QA.",
+    },
+    "source_qa": {
+        "responsibility_boundary": "Only approves, downgrades, excludes, or flags sources before analysis.",
+        "may_do": ["Check freshness", "detect conflicts", "produce GapList", "approve CleanSourceList"],
+        "must_not_do": ["Write analysis", "resolve conflicts by guessing", "bury weak-source caveats"],
+        "handoff_to": "Gap Filler when blocked, otherwise Framework/Specialist analysis.",
+    },
+    "gap_filler": {
+        "responsibility_boundary": "Only fills Source QA-listed gaps or conflicts.",
+        "may_do": ["Refetch official sources", "target exact conflicts", "write RefetchNotes"],
+        "must_not_do": ["Expand scope", "start new research threads", "force unresolved conflicts through"],
+        "handoff_to": "Source QA or Framework Analyst after gap/conflict closure.",
+    },
+    "framework_analyst": {
+        "responsibility_boundary": "Only converts approved evidence into framework-structured claims.",
+        "may_do": ["Label claim types", "group by dimension", "state reasoning basis"],
+        "must_not_do": ["Use unapproved sources", "mix facts and judgments", "overclaim weak evidence"],
+        "handoff_to": "Finance/Marketing Specialists and Citation Auditor.",
+    },
+    "finance_specialist": {
+        "responsibility_boundary": "Only handles finance-specific interpretation when the confirmed task requires it.",
+        "may_do": ["Add metric interpretation", "state assumptions", "patch ClaimGraph with sourced finance claims"],
+        "must_not_do": ["Make trade recommendations", "omit period/currency/口径", "force finance into map marketing tasks"],
+        "handoff_to": "Citation Auditor.",
+    },
+    "marketing_specialist": {
+        "responsibility_boundary": "Only turns approved evidence into marketing, positioning, growth, and action logic.",
+        "may_do": ["Map segment/channel/funnel/metric", "use marketing skills as methods", "patch ClaimGraph"],
+        "must_not_do": ["Give generic advice", "invent user insights", "ignore evidence gaps"],
+        "handoff_to": "Citation Auditor.",
+    },
+    "citation_auditor": {
+        "responsibility_boundary": "Only checks claim-source support before report writing.",
+        "may_do": ["Verify source_ids", "downgrade claims", "block unsupported statements"],
+        "must_not_do": ["Add new claims", "rewrite strategy beyond support", "accept topic-only citations"],
+        "handoff_to": "Report Writer after CitationAudit passes.",
+    },
+    "report_writer": {
+        "responsibility_boundary": "Only compresses approved claims into the selected reader-facing report family.",
+        "may_do": ["Select report family", "write conclusion-first draft", "render references", "state risks"],
+        "must_not_do": ["Add uncited claims", "force a fixed template", "hide uncertainty"],
+        "handoff_to": "Humanizer Editor.",
+    },
+    "humanizer_editor": {
+        "responsibility_boundary": "Only edits expression and removes AI-like phrasing.",
+        "may_do": ["Tighten wording", "remove filler", "adapt tone to market team reader"],
+        "must_not_do": ["Change facts", "change citations", "increase certainty", "delete caveats"],
+        "handoff_to": "Integrity Diff Checker.",
+    },
+    "integrity_diff_checker": {
+        "responsibility_boundary": "Only verifies the Humanizer preserved evidence-bearing content.",
+        "may_do": ["Compare numbers/dates/source_ids", "flag changed risk labels", "block final review"],
+        "must_not_do": ["Rewrite the report", "approve changed facts", "skip failed diff"],
+        "handoff_to": "Final report review or back to Humanizer.",
+    },
+}
+
+
 ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
     "IntentBrief": {
         "producer_nodes": ["intent_router"],
@@ -2095,7 +2207,7 @@ CODEX_EXECUTION_MODEL: Dict[str, Any] = {
 
 def get_node_contracts() -> List[Dict[str, Any]]:
     """Return the ordered agent-node contracts."""
-    return deepcopy(NODE_CONTRACTS)
+    return [_enrich_node_contract(node) for node in NODE_CONTRACTS]
 
 
 def get_artifact_contracts() -> Dict[str, Dict[str, Any]]:
@@ -2121,6 +2233,9 @@ def build_agent_prompt(node_id: str) -> str:
         "## Input Artifact",
         str(node["input_artifact"]),
         "",
+        "## Responsibility Boundary",
+        str(node["responsibility_boundary"]),
+        "",
         "## LLM Judgment",
         str(node["llm_judgment"]),
         "",
@@ -2145,6 +2260,14 @@ def build_agent_prompt(node_id: str) -> str:
                 )
             )
 
+    lines.extend(["", "## May Do"])
+    for item in _as_list(node["may_do"]):
+        lines.append(f"- {item}")
+
+    lines.extend(["", "## Must Not Do"])
+    for item in _as_list(node["must_not_do"]):
+        lines.append(f"- {item}")
+
     lines.extend(["", "## Output Artifact", str(node["output_artifact"]), ""])
 
     if output_artifacts:
@@ -2162,6 +2285,7 @@ def build_agent_prompt(node_id: str) -> str:
     lines.extend(["## Quality Gate", str(node["quality_gate"]), "", "## Hard Constraints"])
     for item in _as_list(node["hard_constraints"]):
         lines.append(f"- {item}")
+    lines.extend(["", "## Handoff", str(node["handoff_to"])])
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -2173,17 +2297,21 @@ def get_node_playbook(node_id: str) -> Dict[str, Any]:
         "node_id": node["id"],
         "node": node["name"],
         "input": node["input_artifact"],
+        "responsibility_boundary": node["responsibility_boundary"],
         "llm_judgment": node["llm_judgment"],
         "skill_tool_calls": node["tool_or_skill_use"],
+        "may_do": node["may_do"],
+        "must_not_do": node["must_not_do"],
         "output_artifact": node["output_artifact"],
         "next_step_condition": node["quality_gate"],
         "hard_constraints": node["hard_constraints"],
+        "handoff_to": node["handoff_to"],
     }
 
 
 def get_workflow_playbook() -> List[Dict[str, Any]]:
     """Return all nodes in the user-facing progression format."""
-    return [get_node_playbook(node["id"]) for node in NODE_CONTRACTS]
+    return [get_node_playbook(node["id"]) for node in get_node_contracts()]
 
 
 def render_workflow_playbook_markdown() -> str:
@@ -2201,13 +2329,21 @@ def render_workflow_playbook_markdown() -> str:
                 "",
                 f"**输入**：{node['input']}",
                 "",
+                f"**职责边界**：{node['responsibility_boundary']}",
+                "",
                 f"**LLM判断**：{node['llm_judgment']}",
                 "",
                 f"**skill/tool调用**：{_format_inline_list(node['skill_tool_calls'])}",
                 "",
+                f"**可做**：{_format_inline_list(node['may_do'])}",
+                "",
+                f"**不可做**：{_format_inline_list(node['must_not_do'])}",
+                "",
                 f"**输出artifact**：{node['output_artifact']}",
                 "",
                 f"**进入下一步条件**：{node['next_step_condition']}",
+                "",
+                f"**交给下一步**：{node['handoff_to']}",
                 "",
                 f"**硬约束**：{_format_inline_list(node['hard_constraints'])}",
                 "",
@@ -2523,8 +2659,22 @@ def summarize_node_chain(max_nodes: int = 0) -> List[str]:
 def _node_by_id(node_id: str) -> Dict[str, Any]:
     for node in NODE_CONTRACTS:
         if node["id"] == node_id:
-            return deepcopy(node)
+            return _enrich_node_contract(node)
     raise KeyError(f"Unknown node: {node_id}")
+
+
+def _enrich_node_contract(node: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = deepcopy(node)
+    boundary = NODE_BOUNDARIES.get(node["id"], {})
+    enriched.update(
+        {
+            "responsibility_boundary": boundary.get("responsibility_boundary", ""),
+            "may_do": boundary.get("may_do", []),
+            "must_not_do": boundary.get("must_not_do", []),
+            "handoff_to": boundary.get("handoff_to", ""),
+        }
+    )
+    return enriched
 
 
 def _artifact_contracts_for_output(output_artifact: str) -> Dict[str, Dict[str, Any]]:

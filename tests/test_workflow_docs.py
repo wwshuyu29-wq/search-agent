@@ -86,8 +86,41 @@ class WorkflowDocsTest(unittest.TestCase):
         ]:
             self.assertIn(f"## {node_name}", text)
 
-        for label in ["**输入**", "**LLM判断**", "**skill/tool调用**", "**输出artifact**", "**进入下一步条件**"]:
+        for label in [
+            "**输入**",
+            "**职责边界**",
+            "**LLM判断**",
+            "**skill/tool调用**",
+            "**可做**",
+            "**不可做**",
+            "**输出artifact**",
+            "**进入下一步条件**",
+        ]:
             self.assertIn(label, text)
+
+    def test_report_templates_and_social_policy_are_documented(self):
+        report_text = (REPO_ROOT / "references" / "report-templates.md").read_text(encoding="utf-8")
+        social_text = (REPO_ROOT / "references" / "social-ugc-policy.md").read_text(encoding="utf-8")
+
+        for term in [
+            "百度地图市场组",
+            "竞品动态简报",
+            "市场响应建议",
+            "报告不是固定模板",
+            "source_id",
+            "去 AI 味",
+        ]:
+            self.assertIn(term, report_text)
+
+        for term in [
+            "B站",
+            "社媒",
+            "卡点",
+            "低置信度",
+            "交叉验证",
+            "不抓取隐私",
+        ]:
+            self.assertIn(term, social_text)
 
     def test_usage_documents_workflow_dry_run_command(self):
         text = (REPO_ROOT / "USAGE.md").read_text(encoding="utf-8")

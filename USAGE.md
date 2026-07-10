@@ -173,6 +173,12 @@ python bin/search_agent.py --workflow-continue-from-sources --state-file search_
 python bin/search_agent.py --workflow-playbook
 ```
 
+如果要讨论子 Agent 边界、B站/社媒卡点或报告模板，优先看：
+
+- `references/node-playbook.md`
+- `references/social-ugc-policy.md`
+- `references/report-templates.md`
+
 想查看每个节点能调用哪些 skill/tool、怎么调用、产物能不能当证据：
 
 ```bash

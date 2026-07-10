@@ -19,6 +19,12 @@ Use these executable helpers when implementing or inspecting the workflow:
 - `build_agent_prompt(node_id)`: concrete prompt for a single sub-agent, including schema and hard constraints.
 - `get_skill_chain(domain)`: finance, marketing, and mixed finance x marketing skill chains.
 
+Related human-facing references:
+
+- `references/node-playbook.md`: every sub-agent's input, boundary, LLM judgment, allowed actions, forbidden actions, output artifact, and handoff condition.
+- `references/report-templates.md`: report families and quality bar for 百度地图市场组.
+- `references/social-ugc-policy.md`: B站/社媒 source policy, 卡点, and confidence handling.
+
 金字塔结构在这里是内部组织原则：先回答决策，再给证据支撑、分析展开、风险和参考文献；它不是要求所有报告都长成同一个可见模板。
 
 Every node contract must expose these fields:

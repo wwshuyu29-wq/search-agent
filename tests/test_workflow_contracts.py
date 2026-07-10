@@ -42,6 +42,10 @@ class WorkflowContractsTest(unittest.TestCase):
                 self.assertTrue(node["output_artifact"])
                 self.assertTrue(node["quality_gate"])
                 self.assertTrue(node["hard_constraints"])
+                self.assertTrue(node["responsibility_boundary"])
+                self.assertTrue(node["may_do"])
+                self.assertTrue(node["must_not_do"])
+                self.assertTrue(node["handoff_to"])
 
     def test_specialist_skill_chains_cover_finance_marketing_and_mixed_work(self):
         from workflow_contracts import get_skill_chain
@@ -338,11 +342,15 @@ class WorkflowContractsTest(unittest.TestCase):
                 "node_id",
                 "node",
                 "input",
+                "responsibility_boundary",
                 "llm_judgment",
                 "skill_tool_calls",
+                "may_do",
+                "must_not_do",
                 "output_artifact",
                 "next_step_condition",
                 "hard_constraints",
+                "handoff_to",
             ],
         )
         self.assertIn("customer-research", playbook["skill_tool_calls"])
@@ -378,8 +386,11 @@ class WorkflowContractsTest(unittest.TestCase):
 
         for heading in [
             "**输入**",
+            "**职责边界**",
             "**LLM判断**",
             "**skill/tool调用**",
+            "**可做**",
+            "**不可做**",
             "**输出artifact**",
             "**进入下一步条件**",
         ]:
