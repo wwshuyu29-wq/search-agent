@@ -113,6 +113,31 @@ If more than four frameworks are needed, the audit card must explain why; otherw
 
 ## Node Contracts
 
+### R0 execution-layer update
+
+The executable contract has moved from a direct `SourceList -> Source QA -> ClaimGraph`
+path to a stricter evidence chain:
+
+```text
+SourceListFragment
+  -> SourceList Merger
+  -> RawSourceList + MergerLog
+  -> Source QA
+  -> SourceQANotes + ConflictRegister + GapList + CleanSourceList
+  -> optional Gap Filler / Conflict Refetch
+  -> ClaimGraph + SpecialistNotes + ClaimGraphPatch
+  -> CitationAudit + ApprovedClaimGraph
+  -> ReportDraft
+  -> FinalReport + HumanizerChangeLog
+  -> IntegrityDiff
+```
+
+When this document and `lib/workflow_contracts.py` differ, treat
+`lib/workflow_contracts.py` as the source of truth. Source Hunter nodes now
+produce `SourceListFragment` rows, not final analysis-ready sources. The
+`SourceList Merger` performs deterministic dedupe/canonicalization before
+Source QA. `Integrity Diff Checker` must pass before final review.
+
 ### Intent Router Agent
 
 **Role**: Convert the user's message into a business decision and propose the framework path.
@@ -151,12 +176,51 @@ If more than four frameworks are needed, the audit card must explain why; otherw
 
 **Input**: Search plan.
 
-**Output**: YAML source list.
+**Output**: SourceListFragment rows.
 
 **Must do**:
 - Prioritize Layer 1 official sources before media and social sources.
 - Normalize every item into `source_id / title / publisher / source_type / publish_date / url / confidence / key_facts / full_text_fetched`.
 - Keep UGC/social sources as low-confidence sentiment unless independently verified.
+
+### SourceList Merger
+
+**Role**: Merge SourceListFragment rows from all Source Hunter nodes without adding facts.
+
+**Input**: SourceListFragment rows.
+
+**Output**: RawSourceList and MergerLog.
+
+**Must do**:
+- Canonicalize URLs and merge duplicates.
+- Preserve channel provenance.
+- Keep original/official sources ahead of reposts or summaries.
+- Record merged source IDs and id rewrites.
+
+### Gap Filler / Conflict Refetch Agent
+
+**Role**: Address only Source QA gaps and conflicts.
+
+**Input**: GapList and ConflictRegister.
+
+**Output**: SupplementalSourceList and RefetchNotes.
+
+**Must do**:
+- Refetch original official/IR/regulatory sources for listed conflicts.
+- Avoid expanding the research scope without user confirmation.
+- Leave unresolved conflicts visible for user decision.
+
+### Integrity Diff Checker
+
+**Role**: Verify Humanizer did not change evidence-bearing content.
+
+**Input**: ReportDraft, FinalReport, HumanizerChangeLog.
+
+**Output**: IntegrityDiff.
+
+**Must do**:
+- Compare numbers, dates, source_ids, claim_ids, confidence labels, and risk boundaries.
+- Block final review if evidence-bearing content changed.
 
 ### Media Source Hunter
 

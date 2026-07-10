@@ -113,6 +113,61 @@ python bin/search_agent.py --workflow-resume 通过 --state-file search_agent_st
 
 CLI 的 gate runner 用来验证状态流转；Codex 里的真实调研会用同一套节点契约，但 Source Hunter 阶段应替换为真实检索和工具调用结果。
 
+## 真实检索竖切
+
+`真实检索竖切` 的意思是：先不追求所有平台、所有子 agent 一次性全自动，而是先把一条真实链路跑到底。它必须满足四件事：
+
+1. 输入来自 `SearchPlan`，不是临时手写关键词。
+2. 执行者是明确的 Source Hunter 子 agent，例如 `official_source_hunter`。
+3. 中间调用真实工具，例如 Firecrawl、RSS、agent-reach 或金融/营销 skill，不用占位数据冒充。
+4. 输出写成标准 `SourceListFragment`，下一步可以交给 SourceList Merger 和 Source QA。
+
+第一条已接入的执行链是：
+
+```text
+SearchPlan task
+  -> SourceHunterExecutor
+  -> Firecrawl search wrapper（需要 FIRECRAWL_API_KEY）
+  -> normalized SourceListFragment
+  -> workflow state file
+```
+
+命令入口：
+
+```bash
+python bin/search_agent.py --execute-source-hunter official_source_hunter --state-file search_agent_state.json --limit-per-query 5
+```
+
+如果本机没有 `FIRECRAWL_API_KEY`，节点状态会写成 `skipped_missing_tool_config`，并把缺失配置写入 warnings。这样做的原则是宁可明确跳过，也不伪造来源。
+
+需要查看某个 phase 要派发哪些子 Agent 时，导出 node packets：
+
+```bash
+python bin/search_agent.py --workflow-packets step1_parallel_source_hunting --state-file search_agent_state.json
+```
+
+每个 packet 都包含 node_id、node_name、input_payload、prompt、allowed_tools_or_skills、output_artifact、quality_gate 和 hard_constraints。Codex 可以把这些 packet 作为子 Agent 派发任务；没有多 Agent 工具时，也可以由同一会话逐个执行。
+
+Source QA 如果发现数字冲突、关键证据缺口或来源口径不一致，状态机会停在 `source_qa_conflict_resolution`。用户选择口径或补充来源后，Workflow 才能继续进入 Framework Analyst。
+
+R0 执行层的证据链已经扩展为：
+
+```text
+SourceListFragment
+  -> SourceList Merger
+  -> RawSourceList + MergerLog
+  -> Source QA
+  -> ConflictRegister + GapList + CleanSourceList
+  -> Gap Filler / Conflict Refetch（条件执行）
+  -> ClaimGraph + SpecialistNotes + ClaimGraphPatch
+  -> CitationAudit + ApprovedClaimGraph
+  -> ReportDraft
+  -> FinalReport + HumanizerChangeLog
+  -> IntegrityDiff
+```
+
+这条链路的目的不是增加形式，而是保证 Source Hunter 的候选来源不会直接进入分析，报告也不会在 Humanizer 改写后绕过事实完整性检查。
+
 ## 提示词是否必须写 sub agent
 
 不需要。团队成员正常使用时只要写 `用 search-agent`，Codex 会加载 `SKILL.md`，再按节点契约执行多 agent workflow。

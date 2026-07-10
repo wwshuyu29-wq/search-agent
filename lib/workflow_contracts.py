@@ -60,7 +60,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
         "input_artifact": "SearchPlan official-source tasks",
         "llm_judgment": "Judge whether a result is the primary source that can prove the claim.",
         "tool_or_skill_use": ["Firecrawl", "realtime-search Brave", "URL full-text fetch"],
-        "output_artifact": "SourceList rows with OFF### ids",
+        "output_artifact": "SourceListFragment rows with OFF### ids",
         "quality_gate": "Official rows include publisher, date, URL, key facts, and fetched/full-text status.",
         "hard_constraints": [
             "Official announcements and filings outrank media summaries.",
@@ -78,7 +78,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "realtime-search Baidu",
             "URL full-text fetch",
         ],
-        "output_artifact": "SourceList rows with MED### ids",
+        "output_artifact": "SourceListFragment rows with MED### ids",
         "quality_gate": "Media rows distinguish reported fact, expert interpretation, and opinion.",
         "hard_constraints": [
             "Do not let media framing outrank official evidence for primary facts.",
@@ -95,7 +95,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "news-aggregator-skill",
             "Firecrawl full-text fetch for high-relevance items",
         ],
-        "output_artifact": "SourceList rows with RSS### / NEWS### ids",
+        "output_artifact": "SourceListFragment rows with RSS### / NEWS### ids",
         "quality_gate": "RSS candidates explain relevance score and confidence; high-impact facts need stronger sources.",
         "hard_constraints": [
             "relevance_score >= 0.6 is a full-text fetch gate, not a truth score.",
@@ -112,7 +112,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "Bilibili / social search where available",
             "opencli-reader / social readers for finance communities when applicable",
         ],
-        "output_artifact": "SourceList rows with UGC### ids",
+        "output_artifact": "SourceListFragment rows with UGC### ids",
         "quality_gate": "UGC rows are labeled low confidence unless independently verified.",
         "hard_constraints": [
             "Do not generalize UGC anecdotes into market facts.",
@@ -130,7 +130,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "tradingview-reader",
             "finance-sentiment",
         ],
-        "output_artifact": "SourceList rows with FIN### ids",
+        "output_artifact": "SourceListFragment rows with FIN### ids",
         "quality_gate": "Every numeric row has period, currency, metric definition, and source.",
         "hard_constraints": [
             "Single-number queries short-circuit the full report unless interpretation is requested.",
@@ -149,7 +149,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "public-relations",
             "analytics",
         ],
-        "output_artifact": "SourceList rows with MKT### ids",
+        "output_artifact": "SourceListFragment rows with MKT### ids",
         "quality_gate": "Marketing rows identify segment, channel, funnel stage, or behavior signal.",
         "hard_constraints": [
             "Do not convert generic marketing advice into a finding.",
@@ -157,9 +157,30 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
         ],
     },
     {
+        "id": "source_list_merger",
+        "name": "SourceList Merger",
+        "input_artifact": "SourceListFragment rows from all Source Hunter nodes",
+        "llm_judgment": (
+            "Do not search or analyze; deterministically merge hunter fragments, "
+            "dedupe canonical URLs, preserve channel provenance, and keep original-source priority."
+        ),
+        "tool_or_skill_use": [
+            "URL canonicalizer",
+            "schema validator",
+            "content hash / duplicate checks",
+        ],
+        "output_artifact": "RawSourceList + MergerLog",
+        "quality_gate": "source_id values are unique, duplicate URLs are merged, and MergerLog records what changed.",
+        "hard_constraints": [
+            "Do not create new facts while merging.",
+            "Do not drop channel provenance when deduplicating.",
+            "Official/original sources outrank reposts and media summaries.",
+        ],
+    },
+    {
         "id": "source_qa",
         "name": "Source QA Agent",
-        "input_artifact": "Raw SourceList",
+        "input_artifact": "RawSourceList + SearchPlan",
         "llm_judgment": "Challenge source strength, conflicts, missing evidence, freshness, and source independence.",
         "tool_or_skill_use": [
             "URL normalization",
@@ -167,11 +188,33 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
             "date parsing",
             "numeric comparison",
         ],
-        "output_artifact": "SourceQANotes + CleanSourceList",
+        "output_artifact": "SourceQANotes + ConflictRegister + GapList + CleanSourceList",
         "quality_gate": "High-impact conflicts are resolved, downgraded, or paused for user choice.",
         "hard_constraints": [
             "Do not analyze from stale or duplicate sources without marking the limitation.",
             "Paywalled summaries must be labeled as summaries.",
+        ],
+    },
+    {
+        "id": "gap_filler",
+        "name": "Gap Filler / Conflict Refetch Agent",
+        "input_artifact": "GapList + ConflictRegister",
+        "llm_judgment": (
+            "Only address gaps or conflicts explicitly raised by Source QA; "
+            "find original sources, resolve numeric口径, or mark unresolved conflict."
+        ),
+        "tool_or_skill_use": [
+            "Firecrawl",
+            "realtime-search Brave",
+            "URL full-text fetch",
+            "official / regulatory / IR search",
+            "finance skill when the conflict is financial",
+        ],
+        "output_artifact": "SupplementalSourceList + RefetchNotes",
+        "quality_gate": "Resolved gaps are tied back to gap_id/conflict_id; unresolved items remain paused for user choice.",
+        "hard_constraints": [
+            "Do not expand beyond Source QA's listed gaps or conflicts.",
+            "Do not introduce new research directions without user confirmation.",
         ],
     },
     {
@@ -240,10 +283,10 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
     {
         "id": "citation_auditor",
         "name": "Citation Auditor Agent",
-        "input_artifact": "ClaimGraph + CleanSourceList",
+        "input_artifact": "ClaimGraph + CleanSourceList + SpecialistNotes",
         "llm_judgment": "Read each claim against cited sources and judge whether support is real, partial, or absent.",
         "tool_or_skill_use": ["source_id existence checks", "reference table checks", "claim-source comparison"],
-        "output_artifact": "CitationAudit",
+        "output_artifact": "CitationAudit + ApprovedClaimGraph",
         "quality_gate": "Unsupported claims are removed, rewritten, or downgraded before report writing.",
         "hard_constraints": [
             "No citation, no factual claim.",
@@ -253,7 +296,7 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
     {
         "id": "report_writer",
         "name": "Report Writer Agent",
-        "input_artifact": "CitationAudit + audited ClaimGraph + CleanSourceList",
+        "input_artifact": "ApprovedClaimGraph + CitationAudit + CleanSourceList",
         "llm_judgment": "Choose a reader-appropriate report family and compress claims into a useful decision document.",
         "tool_or_skill_use": [
             "report family selector",
@@ -273,11 +316,31 @@ NODE_CONTRACTS: List[Dict[str, Any]] = [
         "input_artifact": "ReportDraft + CleanSourceList + reader profile",
         "llm_judgment": "Remove AI-like phrasing while preserving evidence, numbers, citations, and risk boundaries.",
         "tool_or_skill_use": ["humanizer", "humanizer-zh", "copy-editing"],
-        "output_artifact": "FinalReport",
+        "output_artifact": "FinalReport + HumanizerChangeLog",
         "quality_gate": "Final text sounds like a professional internal research note, not a prompt template.",
         "hard_constraints": [
             "Do not change facts, numbers, citations, or confidence levels.",
             "Do not add personality or unsupported certainty.",
+        ],
+    },
+    {
+        "id": "integrity_diff_checker",
+        "name": "Integrity Diff Checker",
+        "input_artifact": "ReportDraft + FinalReport + HumanizerChangeLog",
+        "llm_judgment": (
+            "Check whether the Humanizer changed facts, numbers, dates, source_ids, claim_ids, "
+            "confidence labels, risk boundaries, or conclusion strength."
+        ),
+        "tool_or_skill_use": [
+            "local diff",
+            "regex extraction for numbers/dates/source_id/claim_id",
+            "schema validator",
+        ],
+        "output_artifact": "IntegrityDiff",
+        "quality_gate": "No factual, numeric, citation, confidence, or risk-boundary changes before final review.",
+        "hard_constraints": [
+            "If integrity fails, return to Humanizer; do not send to final review.",
+            "Style edits are allowed; evidence changes are not.",
         ],
     },
 ]
@@ -351,6 +414,34 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "Every task declares what evidence would prove or weaken the claim.",
         ],
     },
+    "SourceListFragment": {
+        "producer_nodes": [
+            "official_source_hunter",
+            "media_source_hunter",
+            "rss_news_hunter",
+            "ugc_social_hunter",
+            "finance_data_hunter",
+            "marketing_intelligence_hunter",
+        ],
+        "consumer_nodes": ["source_list_merger"],
+        "required_fields": [
+            "source_id",
+            "title",
+            "publisher",
+            "source_type",
+            "publish_date",
+            "url",
+            "confidence",
+            "key_facts",
+            "full_text_fetched",
+            "collected_by",
+            "confidence_rationale",
+        ],
+        "quality_rules": [
+            "Each fragment keeps the hunter prefix and provenance.",
+            "Rows are evidence candidates only; no analysis conclusions are allowed.",
+        ],
+    },
     "SourceList": {
         "producer_nodes": [
             "official_source_hunter",
@@ -380,9 +471,40 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "Confidence includes rationale, not only high/medium/low.",
         ],
     },
+    "RawSourceList": {
+        "producer_nodes": ["source_list_merger"],
+        "consumer_nodes": ["source_qa"],
+        "required_fields": [
+            "sources",
+            "source_count",
+            "canonical_url",
+            "merged_duplicate_count",
+        ],
+        "quality_rules": [
+            "All source_id values are unique after merge.",
+            "Canonical URL or normalized URL is present for dedupe audit.",
+            "Channel provenance is retained for every kept source.",
+        ],
+    },
+    "MergerLog": {
+        "producer_nodes": ["source_list_merger"],
+        "consumer_nodes": ["source_qa"],
+        "required_fields": [
+            "input_count",
+            "output_count",
+            "deduped_count",
+            "merged_sources",
+            "id_rewrites",
+            "warnings",
+        ],
+        "quality_rules": [
+            "Every dropped or merged source is traceable to a kept source.",
+            "source_id rewrites are explicit.",
+        ],
+    },
     "SourceQANotes": {
         "producer_nodes": ["source_qa"],
-        "consumer_nodes": ["framework_analyst", "finance_specialist", "marketing_specialist"],
+        "consumer_nodes": ["gap_filler", "framework_analyst", "finance_specialist", "marketing_specialist"],
         "required_fields": [
             "deduped_count",
             "removed_duplicates",
@@ -397,6 +519,32 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "Missing source classes are recorded before analysis begins.",
         ],
     },
+    "ConflictRegister": {
+        "producer_nodes": ["source_qa", "gap_filler"],
+        "consumer_nodes": ["gap_filler", "framework_analyst"],
+        "required_fields": [
+            "conflicts",
+            "requires_user_decision",
+            "recommended_resolution",
+        ],
+        "quality_rules": [
+            "High-severity conflicts explain why they matter.",
+            "User-facing options are explicit when a decision is needed.",
+        ],
+    },
+    "GapList": {
+        "producer_nodes": ["source_qa"],
+        "consumer_nodes": ["gap_filler", "framework_analyst"],
+        "required_fields": [
+            "gaps",
+            "requires_refetch",
+            "blocking_gap_count",
+        ],
+        "quality_rules": [
+            "Every gap maps to a SearchPlan task or framework dimension.",
+            "Blocking gaps stop analysis until filled or accepted by the user.",
+        ],
+    },
     "CleanSourceList": {
         "producer_nodes": ["source_qa"],
         "consumer_nodes": ["framework_analyst", "finance_specialist", "marketing_specialist", "citation_auditor"],
@@ -409,6 +557,33 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
         "quality_rules": [
             "Only approved sources can support material claims.",
             "Excluded sources keep a reason for auditability.",
+        ],
+    },
+    "SupplementalSourceList": {
+        "producer_nodes": ["gap_filler"],
+        "consumer_nodes": ["source_list_merger", "source_qa"],
+        "required_fields": [
+            "sources",
+            "resolved_gap_ids",
+            "resolved_conflict_ids",
+        ],
+        "quality_rules": [
+            "Supplemental sources only address Source QA gaps/conflicts.",
+            "New sources must be re-merged and re-QA'd before analysis.",
+        ],
+    },
+    "RefetchNotes": {
+        "producer_nodes": ["gap_filler"],
+        "consumer_nodes": ["source_qa"],
+        "required_fields": [
+            "attempted_gap_ids",
+            "attempted_conflict_ids",
+            "resolved_items",
+            "unresolved_items",
+        ],
+        "quality_rules": [
+            "Unresolved conflicts remain visible for user choice.",
+            "No new research direction is introduced by refetch.",
         ],
     },
     "ClaimGraph": {
@@ -429,6 +604,35 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "Judgment claims explain the reasoning basis.",
         ],
     },
+    "SpecialistNotes": {
+        "producer_nodes": ["finance_specialist", "marketing_specialist"],
+        "consumer_nodes": ["citation_auditor", "report_writer"],
+        "required_fields": [
+            "specialist",
+            "notes",
+            "source_ids",
+            "risk_boundaries",
+        ],
+        "quality_rules": [
+            "Specialist notes distinguish fact, observation, inference, and recommendation.",
+            "Finance/marketing patches keep source_ids and metric/segment context.",
+        ],
+    },
+    "ClaimGraphPatch": {
+        "producer_nodes": ["finance_specialist", "marketing_specialist"],
+        "consumer_nodes": ["framework_analyst", "citation_auditor"],
+        "required_fields": [
+            "patch_id",
+            "target_claim_ids",
+            "new_claims",
+            "source_ids",
+            "patch_reason",
+        ],
+        "quality_rules": [
+            "Patches cannot introduce unsupported claims.",
+            "Patches preserve claim_type and confidence semantics.",
+        ],
+    },
     "CitationAudit": {
         "producer_nodes": ["citation_auditor"],
         "consumer_nodes": ["framework_analyst", "report_writer"],
@@ -442,6 +646,20 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
         "quality_rules": [
             "status is pass only when every material claim is supported.",
             "Unsupported claims are blocked or downgraded before ReportDraft.",
+        ],
+    },
+    "ApprovedClaimGraph": {
+        "producer_nodes": ["citation_auditor"],
+        "consumer_nodes": ["report_writer"],
+        "required_fields": [
+            "approved_claim_ids",
+            "claims",
+            "blocked_claim_ids",
+            "citation_audit_status",
+        ],
+        "quality_rules": [
+            "Only supported or explicitly allowed partially supported claims remain.",
+            "Blocked claims are unavailable to Report Writer.",
         ],
     },
     "ReportDraft": {
@@ -460,9 +678,22 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "Every material claim keeps a citation.",
         ],
     },
+    "HumanizerChangeLog": {
+        "producer_nodes": ["humanizer_editor"],
+        "consumer_nodes": ["integrity_diff_checker"],
+        "required_fields": [
+            "changed_sections",
+            "style_only",
+            "unchanged_fact_confirmation",
+        ],
+        "quality_rules": [
+            "Humanizer explicitly confirms facts, numbers, citations, and confidence were preserved.",
+            "Any non-style change must be flagged before integrity check.",
+        ],
+    },
     "FinalReport": {
         "producer_nodes": ["humanizer_editor"],
-        "consumer_nodes": ["user"],
+        "consumer_nodes": ["integrity_diff_checker", "user"],
         "required_fields": [
             "markdown",
             "report_family",
@@ -473,6 +704,24 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
         "quality_rules": [
             "Humanizer changes style only, not facts or citations.",
             "The final report keeps references and uncertainty labels.",
+        ],
+    },
+    "IntegrityDiff": {
+        "producer_nodes": ["integrity_diff_checker"],
+        "consumer_nodes": ["humanizer_editor", "user"],
+        "required_fields": [
+            "status",
+            "changed_numbers",
+            "changed_dates",
+            "changed_source_ids",
+            "changed_claim_ids",
+            "changed_confidence",
+            "risk_boundary_changes",
+            "new_factual_sentences",
+        ],
+        "quality_rules": [
+            "status is passed only when evidence-bearing content is unchanged.",
+            "Failures return to Humanizer before final review.",
         ],
     },
 }
@@ -514,9 +763,20 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
             "marketing_intelligence_hunter",
         ],
         "input_artifacts": ["SearchPlan"],
-        "output_artifacts": ["SourceList"],
+        "output_artifacts": ["SourceListFragment"],
         "parallel": True,
-        "gate": "source_list_complete",
+        "gate": "source_list_fragment_valid",
+        "gate_type": "automatic",
+        "halts_for_user": False,
+    },
+    {
+        "id": "step1_source_merge",
+        "step": "Step 1",
+        "nodes": ["source_list_merger"],
+        "input_artifacts": ["SourceListFragment"],
+        "output_artifacts": ["RawSourceList", "MergerLog"],
+        "parallel": False,
+        "gate": "source_merge_complete",
         "gate_type": "automatic",
         "halts_for_user": False,
     },
@@ -524,8 +784,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "id": "step1_source_qa",
         "step": "Step 1",
         "nodes": ["source_qa"],
-        "input_artifacts": ["SourceList"],
-        "output_artifacts": ["SourceQANotes", "CleanSourceList"],
+        "input_artifacts": ["RawSourceList", "MergerLog", "SearchPlan"],
+        "output_artifacts": ["SourceQANotes", "ConflictRegister", "GapList", "CleanSourceList"],
         "parallel": False,
         "gate": "source_qa_passed_or_user_resolved_conflict",
         "gate_type": "conditional_human",
@@ -533,11 +793,23 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "user_prompt": "Resolve numeric conflicts or key source gaps before analysis.",
     },
     {
+        "id": "step1_gap_fill_or_pause",
+        "step": "Step 1",
+        "nodes": ["gap_filler"],
+        "input_artifacts": ["ConflictRegister", "GapList"],
+        "output_artifacts": ["SupplementalSourceList", "RefetchNotes"],
+        "parallel": False,
+        "gate": "gap_fill_complete_or_pause",
+        "gate_type": "conditional_human",
+        "halts_for_user": "only_when_refetch_cannot_resolve_blocking_gap",
+        "user_prompt": "If gaps remain blocking after one refetch pass, ask user to choose scope or evidence standard.",
+    },
+    {
         "id": "step2_analysis_and_specialists",
         "step": "Step 2",
         "nodes": ["framework_analyst", "finance_specialist", "marketing_specialist"],
-        "input_artifacts": ["CleanSourceList", "SourceQANotes", "AuditCard"],
-        "output_artifacts": ["ClaimGraph"],
+        "input_artifacts": ["CleanSourceList", "SourceQANotes", "ConflictRegister", "GapList", "AuditCard"],
+        "output_artifacts": ["ClaimGraph", "SpecialistNotes", "ClaimGraphPatch"],
         "parallel": True,
         "gate": "claim_graph_complete",
         "gate_type": "automatic",
@@ -547,8 +819,8 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "id": "step2_citation_audit",
         "step": "Step 2",
         "nodes": ["citation_auditor"],
-        "input_artifacts": ["ClaimGraph", "CleanSourceList"],
-        "output_artifacts": ["CitationAudit"],
+        "input_artifacts": ["ClaimGraph", "ClaimGraphPatch", "SpecialistNotes", "CleanSourceList"],
+        "output_artifacts": ["CitationAudit", "ApprovedClaimGraph"],
         "parallel": False,
         "gate": "citation_audit_passed",
         "gate_type": "automatic_hard_block",
@@ -558,7 +830,7 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "id": "step3_report_draft",
         "step": "Step 3",
         "nodes": ["report_writer"],
-        "input_artifacts": ["CitationAudit", "ClaimGraph", "CleanSourceList", "IntentBrief"],
+        "input_artifacts": ["ApprovedClaimGraph", "CitationAudit", "CleanSourceList", "IntentBrief"],
         "output_artifacts": ["ReportDraft"],
         "parallel": False,
         "gate": "report_draft_preserves_citations",
@@ -570,13 +842,24 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "step": "Step 3",
         "nodes": ["humanizer_editor"],
         "input_artifacts": ["ReportDraft", "CleanSourceList"],
-        "output_artifacts": ["FinalReport"],
+        "output_artifacts": ["FinalReport", "HumanizerChangeLog"],
         "parallel": False,
         "gate": "final_report_style_only_changes",
+        "gate_type": "automatic",
+        "halts_for_user": False,
+    },
+    {
+        "id": "step3_integrity_check",
+        "step": "Step 3",
+        "nodes": ["integrity_diff_checker"],
+        "input_artifacts": ["ReportDraft", "FinalReport", "HumanizerChangeLog"],
+        "output_artifacts": ["IntegrityDiff"],
+        "parallel": False,
+        "gate": "humanizer_integrity_passed",
         "gate_type": "automatic_then_human",
         "halts_for_user": True,
         "post_gate": "final_report_review",
-        "user_prompt": "Review FinalReport; reply 通过 to complete or provide specific revision notes.",
+        "user_prompt": "Review FinalReport only after IntegrityDiff passes; reply 通过 or provide revision notes.",
     },
 ]
 

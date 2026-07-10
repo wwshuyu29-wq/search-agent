@@ -27,6 +27,7 @@ from intent_classifier import build_step0_context, classify_intent
 from framework_combinator import FrameworkCombinator, recommend_framework_combination
 from search_engine import SearchEngine
 from report_generator import ReportGenerator
+from source_hunter_executor import SourceHunterExecutor
 from workflow_contracts import render_codex_execution_markdown, render_workflow_playbook_markdown
 from workflow_orchestrator import WorkflowOrchestrator
 
@@ -368,6 +369,70 @@ class SearchAgentSkill:
         print(f"\n下一步: {state['next_action']}")
         return state
 
+    def print_node_packets(self, phase_id: str, state_file: str = "search_agent_state.json") -> List[Dict]:
+        """Print constrained sub-agent execution packets for a workflow phase."""
+        orchestrator = WorkflowOrchestrator()
+        state = self._read_workflow_state(state_file)
+        packets = orchestrator.build_node_packets(phase_id, state.get("artifacts", {}))
+
+        print("Sub-Agent Node Packets")
+        print(f"phase_id: {phase_id}")
+        print(f"state_file: {state_file}")
+        for packet in packets:
+            print("\n" + "=" * 60)
+            print(f"node_id: {packet['node_id']}")
+            print(f"node_name: {packet['node_name']}")
+            print(f"parallel: {packet['parallel']}")
+            print(f"output_artifact: {packet['output_artifact']}")
+            print(f"allowed_tools_or_skills: {packet['allowed_tools_or_skills']}")
+            print("\nPrompt:")
+            print(packet["prompt"])
+        return packets
+
+    def execute_source_hunter(
+        self,
+        hunter_id: str,
+        state_file: str = "search_agent_state.json",
+        limit_per_query: int = 5,
+    ) -> Dict:
+        """Execute one real Source Hunter vertical slice and persist its fragment."""
+        state = self._read_workflow_state(state_file)
+        artifacts = state.setdefault("artifacts", {})
+        search_plan = artifacts.get("SearchPlan")
+        if not search_plan:
+            raise ValueError("SearchPlan artifact is required before executing a Source Hunter")
+
+        executor = SourceHunterExecutor()
+        fragment = executor.run_hunter(
+            hunter_id,
+            search_plan,
+            limit_per_query=limit_per_query,
+        )
+
+        existing_fragments = artifacts.get("SourceListFragment", [])
+        if isinstance(existing_fragments, dict):
+            existing_fragments = [existing_fragments]
+        existing_fragments = [
+            item for item in existing_fragments
+            if item.get("node_id") != hunter_id
+        ]
+        existing_fragments.append(fragment)
+        artifacts["SourceListFragment"] = existing_fragments
+        state["current_phase"] = "step1_parallel_source_hunting"
+        state["updated_at"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        self._write_workflow_state(state, state_file)
+
+        print("Source Hunter Executed")
+        print(f"node_id: {hunter_id}")
+        print(f"status: {fragment['execution_status']}")
+        print(f"sources: {len(fragment.get('sources', []))}")
+        print(f"state_file: {state_file}")
+        if fragment.get("warnings"):
+            print("warnings:")
+            for warning in fragment["warnings"]:
+                print(f"- {warning}")
+        return fragment
+
     def _write_workflow_state(self, state: Dict, state_file: str):
         with open(state_file, "w", encoding="utf-8") as file:
             json.dump(state, file, ensure_ascii=False, indent=2)
@@ -569,6 +634,9 @@ def main():
     parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
     parser.add_argument("--workflow-resume", type=str, help="根据用户确认/修订意见恢复 gate-driven workflow")
+    parser.add_argument("--workflow-packets", type=str, help="输出某个 phase 的可派发子 agent packet")
+    parser.add_argument("--execute-source-hunter", type=str, help="执行指定 Source Hunter 节点并写回 SourceListFragment")
+    parser.add_argument("--limit-per-query", type=int, default=5, help="每个检索任务最多返回多少条结果")
     parser.add_argument("--state-file", default="search_agent_state.json", help="gate-driven workflow 状态文件路径")
     parser.add_argument("--codex-execution", action="store_true", help="输出 Codex 内 LLM 调用与团队安装执行模型")
 
@@ -597,6 +665,18 @@ def main():
 
     if args.workflow_resume:
         agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file)
+        return
+
+    if args.workflow_packets:
+        agent.print_node_packets(args.workflow_packets, state_file=args.state_file)
+        return
+
+    if args.execute_source_hunter:
+        agent.execute_source_hunter(
+            args.execute_source_hunter,
+            state_file=args.state_file,
+            limit_per_query=args.limit_per_query,
+        )
         return
 
     if not args.query:

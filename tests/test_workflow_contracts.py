@@ -21,13 +21,16 @@ class WorkflowContractsTest(unittest.TestCase):
             "ugc_social_hunter",
             "finance_data_hunter",
             "marketing_intelligence_hunter",
+            "source_list_merger",
             "source_qa",
+            "gap_filler",
             "framework_analyst",
             "finance_specialist",
             "marketing_specialist",
             "citation_auditor",
             "report_writer",
             "humanizer_editor",
+            "integrity_diff_checker",
         ]
 
         self.assertEqual([node["id"] for node in contracts], expected_nodes)
@@ -97,13 +100,25 @@ class WorkflowContractsTest(unittest.TestCase):
             "IntentBrief",
             "AuditCard",
             "SearchPlan",
+            "SourceListFragment",
             "SourceList",
+            "RawSourceList",
+            "MergerLog",
             "SourceQANotes",
+            "ConflictRegister",
+            "GapList",
             "CleanSourceList",
+            "SupplementalSourceList",
+            "RefetchNotes",
             "ClaimGraph",
+            "SpecialistNotes",
+            "ClaimGraphPatch",
             "CitationAudit",
+            "ApprovedClaimGraph",
             "ReportDraft",
+            "HumanizerChangeLog",
             "FinalReport",
+            "IntegrityDiff",
         ]
 
         self.assertEqual(list(artifacts.keys()), expected)
@@ -115,8 +130,14 @@ class WorkflowContractsTest(unittest.TestCase):
                 self.assertTrue(contract["quality_rules"])
 
         self.assertIn("source_id", artifacts["SourceList"]["required_fields"])
+        self.assertIn("canonical_url", artifacts["RawSourceList"]["required_fields"])
+        self.assertIn("merged_sources", artifacts["MergerLog"]["required_fields"])
+        self.assertIn("conflicts", artifacts["ConflictRegister"]["required_fields"])
+        self.assertIn("gaps", artifacts["GapList"]["required_fields"])
         self.assertIn("claim_type", artifacts["ClaimGraph"]["required_fields"])
         self.assertIn("required_rewrites", artifacts["CitationAudit"]["required_fields"])
+        self.assertIn("approved_claim_ids", artifacts["ApprovedClaimGraph"]["required_fields"])
+        self.assertIn("changed_numbers", artifacts["IntegrityDiff"]["required_fields"])
 
     def test_agent_prompt_builder_renders_each_node_constraints_and_schema(self):
         from workflow_contracts import build_agent_prompt
@@ -142,7 +163,9 @@ class WorkflowContractsTest(unittest.TestCase):
 
         self.assertEqual(phases[0], "step0_intent_and_audit")
         self.assertIn("step1_parallel_source_hunting", phases)
-        self.assertEqual(phases[-1], "step3_humanizer_final")
+        self.assertIn("step1_source_merge", phases)
+        self.assertIn("step1_gap_fill_or_pause", phases)
+        self.assertEqual(phases[-1], "step3_integrity_check")
 
         source_phase = next(phase for phase in plan if phase["id"] == "step1_parallel_source_hunting")
         self.assertTrue(source_phase["parallel"])
@@ -160,6 +183,15 @@ class WorkflowContractsTest(unittest.TestCase):
 
         citation_phase = next(phase for phase in plan if phase["id"] == "step2_citation_audit")
         self.assertEqual(citation_phase["gate"], "citation_audit_passed")
+        self.assertIn("ApprovedClaimGraph", citation_phase["output_artifacts"])
+
+        merge_phase = next(phase for phase in plan if phase["id"] == "step1_source_merge")
+        self.assertEqual(merge_phase["nodes"], ["source_list_merger"])
+        self.assertEqual(merge_phase["output_artifacts"], ["RawSourceList", "MergerLog"])
+
+        integrity_phase = next(phase for phase in plan if phase["id"] == "step3_integrity_check")
+        self.assertEqual(integrity_phase["nodes"], ["integrity_diff_checker"])
+        self.assertEqual(integrity_phase["gate"], "humanizer_integrity_passed")
 
     def test_orchestration_plan_marks_human_gates_and_automatic_gates(self):
         from workflow_contracts import get_orchestration_plan
@@ -175,7 +207,8 @@ class WorkflowContractsTest(unittest.TestCase):
             gates["source_qa_passed_or_user_resolved_conflict"]["gate_type"],
             "conditional_human",
         )
-        self.assertEqual(gates["final_report_style_only_changes"]["post_gate"], "final_report_review")
+        self.assertEqual(gates["gap_fill_complete_or_pause"]["gate_type"], "conditional_human")
+        self.assertEqual(gates["humanizer_integrity_passed"]["post_gate"], "final_report_review")
 
     def test_node_playbook_uses_user_requested_progression_fields(self):
         from workflow_contracts import get_node_playbook
@@ -214,13 +247,16 @@ class WorkflowContractsTest(unittest.TestCase):
             "UGC/Social Hunter",
             "Finance Data Hunter",
             "Marketing Intelligence Hunter",
+            "SourceList Merger",
             "Source QA Agent",
+            "Gap Filler / Conflict Refetch Agent",
             "Framework Analyst Agent",
             "Financial Specialist Agent",
             "Marketing Specialist Agent",
             "Citation Auditor Agent",
             "Report Writer Agent",
             "Humanizer Editor Agent",
+            "Integrity Diff Checker",
         ]:
             self.assertIn(f"## {node_name}", markdown)
 

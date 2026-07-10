@@ -36,7 +36,7 @@
 
 **skill/tool调用**：Firecrawl、realtime-search Brave、URL full-text fetch。
 
-**输出artifact**：`SourceList rows with OFF### ids`
+**输出artifact**：`SourceListFragment rows with OFF### ids`
 
 **进入下一步条件**：官方来源条目包含发布方、日期、URL、key facts、全文抓取状态和可信度理由。
 
@@ -48,7 +48,7 @@
 
 **skill/tool调用**：Firecrawl、realtime-search Brave、realtime-search Baidu、URL full-text fetch。
 
-**输出artifact**：`SourceList rows with MED### ids`
+**输出artifact**：`SourceListFragment rows with MED### ids`
 
 **进入下一步条件**：媒体来源标明报道事实、专家解释或观点属性；付费墙/摘要来源必须降级标注。
 
@@ -60,7 +60,7 @@
 
 **skill/tool调用**：`finance-rss-reader`、`news-aggregator-skill`、高相关条目的 Firecrawl 全文抓取。
 
-**输出artifact**：`SourceList rows with RSS### / NEWS### ids`
+**输出artifact**：`SourceListFragment rows with RSS### / NEWS### ids`
 
 **进入下一步条件**：RSS 条目解释 relevance_score 和 confidence；高影响事实必须继续找官方或强来源验证。
 
@@ -72,7 +72,7 @@
 
 **skill/tool调用**：`agent-reach`、B 站/社交搜索、适用时用 opencli/social readers。
 
-**输出artifact**：`SourceList rows with UGC### ids`
+**输出artifact**：`SourceListFragment rows with UGC### ids`
 
 **进入下一步条件**：UGC 条目默认低置信度，除非被官方、数据或多源证据独立验证。
 
@@ -84,7 +84,7 @@
 
 **skill/tool调用**：`yfinance-data`、`funda-data`、`tradingview-reader`、`finance-sentiment`。
 
-**输出artifact**：`SourceList rows with FIN### ids`
+**输出artifact**：`SourceListFragment rows with FIN### ids`
 
 **进入下一步条件**：每个数字都有期间、币种、指标定义、来源和口径说明。
 
@@ -96,21 +96,45 @@
 
 **skill/tool调用**：`competitor-profiling`、`customer-research`、`directory-submissions`、`public-relations`、`analytics`。
 
-**输出artifact**：`SourceList rows with MKT### ids`
+**输出artifact**：`SourceListFragment rows with MKT### ids`
 
 **进入下一步条件**：营销证据必须绑定用户分群、渠道、漏斗阶段、行为信号或指标，不能只是泛泛建议。
 
+## SourceList Merger
+
+**输入**：SourceListFragment rows from all Source Hunter nodes
+
+**LLM判断**：不做新搜索、不写分析；只判断哪些来源是重复、转载、同源摘要或原始出处，并保留渠道来源关系。
+
+**skill/tool调用**：URL canonicalizer、schema validator、content hash / duplicate checks。
+
+**输出artifact**：`RawSourceList + MergerLog`
+
+**进入下一步条件**：source_id 唯一，重复 URL 已合并，canonical_url 清楚，MergerLog 记录被合并或重写的来源。
+
 ## Source QA Agent
 
-**输入**：Raw SourceList
+**输入**：RawSourceList + SearchPlan
 
 **LLM判断**：挑战来源质量，检查重复、过期、付费摘要、数字冲突、来源独立性和缺失证据。
 
 **skill/tool调用**：URL normalization、duplicate checks、date parsing、numeric comparison。
 
-**输出artifact**：`SourceQANotes + CleanSourceList`
+**输出artifact**：`SourceQANotes + ConflictRegister + GapList + CleanSourceList`
 
 **进入下一步条件**：高影响冲突已解决、降级或暂停给用户选择；只有 approved sources 可以进入分析。
+
+## Gap Filler / Conflict Refetch Agent
+
+**输入**：GapList + ConflictRegister
+
+**LLM判断**：只处理 Source QA 明确列出的缺口和冲突，判断是否能通过一次定向补搜找到一手来源或权威口径。
+
+**skill/tool调用**：Firecrawl、realtime-search Brave、URL full-text fetch、official/regulatory/IR search、finance skill。
+
+**输出artifact**：`SupplementalSourceList + RefetchNotes`
+
+**进入下一步条件**：补充来源必须回填 gap_id/conflict_id；仍无法解决的冲突必须暂停给用户选口径，不能强行进入分析。
 
 ## Framework Analyst Agent
 
@@ -150,19 +174,19 @@
 
 ## Citation Auditor Agent
 
-**输入**：ClaimGraph + CleanSourceList
+**输入**：ClaimGraph + CleanSourceList + SpecialistNotes
 
 **LLM判断**：逐条读 claim 和引用来源，判断来源是否真的支持这句话，是充分、部分还是不支持。
 
 **skill/tool调用**：source_id existence checks、reference table checks、claim-source comparison。
 
-**输出artifact**：`CitationAudit`
+**输出artifact**：`CitationAudit + ApprovedClaimGraph`
 
 **进入下一步条件**：unsupported claims 被删除、改写或降级；CitationAudit 状态为 pass 才能写报告。
 
 ## Report Writer Agent
 
-**输入**：CitationAudit + audited ClaimGraph + CleanSourceList
+**输入**：ApprovedClaimGraph + CitationAudit + CleanSourceList
 
 **LLM判断**：选择适合读者和决策的报告形态，把 claim graph 压缩成可用的业务文档。
 
@@ -180,6 +204,18 @@
 
 **skill/tool调用**：`humanizer`、`humanizer-zh`、`copy-editing`。
 
-**输出artifact**：`FinalReport`
+**输出artifact**：`FinalReport + HumanizerChangeLog`
 
 **进入下一步条件**：事实、数字、引用、置信度和风险边界未被改变，文本像专业内部调研简报。
+
+## Integrity Diff Checker
+
+**输入**：ReportDraft + FinalReport + HumanizerChangeLog
+
+**LLM判断**：检查 Humanizer 是否改坏事实、数字、日期、source_id、claim_id、confidence、风险边界或结论强弱。
+
+**skill/tool调用**：local diff、regex extraction for numbers/dates/source_id/claim_id、schema validator。
+
+**输出artifact**：`IntegrityDiff`
+
+**进入下一步条件**：IntegrityDiff 必须 passed 才能进入 final_report_review；失败则退回 Humanizer，只允许表达层修改。

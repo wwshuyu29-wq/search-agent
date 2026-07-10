@@ -73,13 +73,16 @@ class WorkflowDocsTest(unittest.TestCase):
             "UGC/Social Hunter",
             "Finance Data Hunter",
             "Marketing Intelligence Hunter",
+            "SourceList Merger",
             "Source QA Agent",
+            "Gap Filler / Conflict Refetch Agent",
             "Framework Analyst Agent",
             "Financial Specialist Agent",
             "Marketing Specialist Agent",
             "Citation Auditor Agent",
             "Report Writer Agent",
             "Humanizer Editor Agent",
+            "Integrity Diff Checker",
         ]:
             self.assertIn(f"## {node_name}", text)
 
@@ -94,6 +97,10 @@ class WorkflowDocsTest(unittest.TestCase):
         self.assertIn("--codex-execution", text)
         self.assertIn("--workflow-start", text)
         self.assertIn("--workflow-resume", text)
+        self.assertIn("--workflow-packets", text)
+        self.assertIn("source_qa_conflict_resolution", text)
+        self.assertIn("SourceList Merger", text)
+        self.assertIn("IntegrityDiff", text)
         self.assertIn("Multi-Agent Workflow Dry Run", text)
         self.assertIn("Codex 里不需要为节点 LLM 另配 OpenAI API Key", text)
 
