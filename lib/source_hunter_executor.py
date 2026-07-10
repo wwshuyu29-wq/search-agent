@@ -14,7 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.request import urlopen
 
 from workflow_contracts import select_skill_adapters
 
@@ -292,9 +294,36 @@ class SourceHunterExecutor:
 
 
     def _finance_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
+        selected = select_skill_adapters(
+            query,
+            domain="finance",
+            node_id="finance_data_hunter",
+            limit=max(limit, 6),
+        )
+        selected_skills = {spec["skill"] for spec in selected}
+        results = []
+
+        for spec in selected:
+            if spec["skill"] == "yc-reader":
+                results.extend(self._yc_reader_runner(query, limit=limit))
+            elif spec["skill"] == "funda-data":
+                results.append(self._funda_setup_result(spec))
+            elif spec["skill"] == "twitter-reader":
+                results.extend(self._twitter_reader_runner(query, limit=limit, spec=spec))
+            elif spec["skill"] == "opencli-reader":
+                results.append(self._opencli_setup_result(spec))
+            if len(results) >= limit:
+                return results[:limit]
+
         ticker = self._ticker_from_query(query)
         if not ticker:
-            raise MissingToolConfig("finance_data_hunter requires a ticker symbol in query_en or task metadata")
+            if results:
+                return results[:limit]
+            raise MissingToolConfig("finance_data_hunter requires a ticker symbol or a configured finance adapter trigger")
+
+        explicit_yfinance = self._adapter_triggered(query, "finance", "yfinance-data")
+        if results and "yfinance-data" in selected_skills and not explicit_yfinance:
+            return results[:limit]
 
         script = self.repo_root / "scripts" / "yfinance_snapshot.py"
         if not script.exists():
@@ -317,8 +346,207 @@ class SourceHunterExecutor:
             raise MissingToolConfig("yfinance is required for finance_data_hunter; install requirements first")
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "yfinance_snapshot.py failed")
-        results = json.loads(completed.stdout or "[]")
+        results.extend(json.loads(completed.stdout or "[]"))
         return results[:limit]
+
+    def _yc_reader_runner(self, query: str, *, limit: int) -> List[Dict[str, Any]]:
+        endpoint = self._yc_endpoint_for_query(query)
+        url = f"https://yc-oss.github.io/api/{endpoint}"
+        try:
+            with urlopen(url, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            return [
+                self._finance_adapter_setup_result(
+                    skill="yc-reader",
+                    summary=f"yc-reader public API request failed for {endpoint}: {exc}",
+                    confidence="low",
+                    method_source=False,
+                    fetcher="yc-reader",
+                )
+            ]
+
+        records = payload if isinstance(payload, list) else [payload]
+        results = []
+        for record in records[:limit]:
+            if not isinstance(record, dict):
+                continue
+            name = record.get("name") or record.get("slug") or "YC company"
+            one_liner = record.get("one_liner") or record.get("oneLiner") or ""
+            batch = record.get("batch") or ""
+            team_size = record.get("team_size") or record.get("teamSize")
+            hiring = record.get("isHiring")
+            website = record.get("website") or record.get("url") or ""
+            summary_parts = []
+            if one_liner:
+                summary_parts.append(one_liner)
+            if batch:
+                summary_parts.append(f"batch: {batch}")
+            if team_size is not None:
+                summary_parts.append(f"team_size: {team_size}")
+            if hiring is not None:
+                summary_parts.append(f"is_hiring: {hiring}")
+            results.append(
+                {
+                    "title": f"YC company: {name}",
+                    "url": website or url,
+                    "summary": "; ".join(summary_parts) or f"YC public API record from {endpoint}",
+                    "source": "yc-oss/api",
+                    "confidence": "medium",
+                    "full_text_fetched": True,
+                    "fetcher": "yc-reader",
+                    "metrics": {"yc_endpoint": endpoint},
+                }
+            )
+        return results or [
+            self._finance_adapter_setup_result(
+                skill="yc-reader",
+                summary=f"yc-reader returned no matching company rows from {endpoint}",
+                confidence="low",
+                method_source=False,
+                fetcher="yc-reader",
+            )
+        ]
+
+    def _funda_setup_result(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        if self.env.get("FUNDA_API_KEY"):
+            summary = (
+                "FUNDA_API_KEY detected. Use Funda REST for raw structured data or Funda MCP "
+                "for research synthesis; endpoint selection is handled by the finance specialist."
+            )
+            confidence = "medium"
+        else:
+            summary = (
+                "FUNDA_API_KEY or Funda MCP is required before funda-data can fetch real financial data. "
+                "This row is a setup/routing note, not market evidence."
+            )
+            confidence = "low"
+        return self._finance_adapter_setup_result(
+            skill="funda-data",
+            summary=summary,
+            confidence=confidence,
+            method_source=True,
+            fetcher="funda-data",
+            spec=spec,
+        )
+
+    def _twitter_reader_runner(self, query: str, *, limit: int, spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+        opencli_path = shutil.which("opencli")
+        if not opencli_path:
+            return [
+                self._finance_adapter_setup_result(
+                    skill="twitter-reader",
+                    summary=(
+                        "opencli is required for twitter-reader. Install opencli, enable the Browser Bridge, "
+                        "and log in to x.com in Chrome. This read-only route never posts, likes, or replies."
+                    ),
+                    confidence="low",
+                    method_source=True,
+                    fetcher="twitter-reader",
+                    spec=spec,
+                )
+            ]
+
+        command = [
+            opencli_path,
+            "twitter",
+            "search",
+            query,
+            "--filter",
+            "live",
+            "--limit",
+            str(limit),
+            "-f",
+            "json",
+        ]
+        completed = subprocess.run(command, capture_output=True, text=True, env=self.env, check=False)
+        if completed.returncode != 0:
+            return [
+                self._finance_adapter_setup_result(
+                    skill="twitter-reader",
+                    summary=f"opencli twitter search failed: {completed.stderr.strip() or completed.stdout.strip()}",
+                    confidence="low",
+                    method_source=True,
+                    fetcher="twitter-reader",
+                    spec=spec,
+                )
+            ]
+        records = json.loads(completed.stdout or "[]")
+        if isinstance(records, dict):
+            records = records.get("data") or records.get("items") or []
+        results = []
+        for record in records[:limit]:
+            title = f"Twitter/X: {record.get('author') or record.get('screen_name') or 'post'}"
+            text = record.get("text") or record.get("content") or ""
+            metrics = {
+                key: record.get(key)
+                for key in ["likes", "retweets", "replies", "views"]
+                if record.get(key) is not None
+            }
+            results.append(
+                {
+                    "title": title,
+                    "url": record.get("url") or "",
+                    "summary": text,
+                    "source": "Twitter/X via opencli",
+                    "confidence": "low",
+                    "full_text_fetched": True,
+                    "fetcher": "twitter-reader",
+                    "metrics": metrics,
+                }
+            )
+        return results
+
+    def _opencli_setup_result(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        opencli_path = shutil.which("opencli")
+        if opencli_path:
+            summary = (
+                "opencli is installed. Use opencli list -f json to discover the exact read-only site command "
+                "before fetching non-specialized finance or research sources."
+            )
+            confidence = "medium"
+        else:
+            summary = (
+                "opencli is not installed. Install @jackwener/opencli and configure Browser Bridge before using "
+                "generic read-only sources such as Reddit, Xueqiu, Eastmoney, Bloomberg, Reuters, or Substack."
+            )
+            confidence = "low"
+        return self._finance_adapter_setup_result(
+            skill="opencli-reader",
+            summary=summary,
+            confidence=confidence,
+            method_source=True,
+            fetcher="opencli-reader",
+            spec=spec,
+        )
+
+    def _finance_adapter_setup_result(
+        self,
+        *,
+        skill: str,
+        summary: str,
+        confidence: str,
+        method_source: bool,
+        fetcher: str,
+        spec: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        path = self._finance_skill_path(skill)
+        if spec:
+            summary = (
+                f"{summary} why_use: {spec.get('why_use', '')} "
+                f"output_artifact: {spec.get('output_artifact', '')} "
+                f"use_well: {spec.get('use_well', '')}"
+            )
+        return {
+            "title": f"{skill} setup required" if confidence == "low" else f"{skill} routing",
+            "url": str(path) if path else "",
+            "summary": summary,
+            "source": "local finance skill",
+            "confidence": confidence,
+            "full_text_fetched": bool(path),
+            "method_source": method_source,
+            "fetcher": fetcher,
+        }
 
     def _matching_tasks(self, hunter_id: str, tasks: List[Dict[str, Any]], config: Dict[str, Any]):
         matching = []
@@ -356,6 +584,15 @@ class SourceHunterExecutor:
         publisher = result.get("source") or result.get("publisher") or self._publisher_from_url(url)
         fetcher = result.get("fetcher")
         retrieval_tool = self._retrieval_tool_for(config["source_type"])
+        if fetcher in {
+            "bili-cli",
+            "marketing-skills-catalog",
+            "yc-reader",
+            "funda-data",
+            "twitter-reader",
+            "opencli-reader",
+        }:
+            retrieval_tool = fetcher
         rationale_bits = [
             f"Search runner result for task {task.get('task_id', '')}",
             "requires Source QA before analysis",
@@ -415,6 +652,43 @@ class SourceHunterExecutor:
             if cleaned.isupper() and 1 <= len(cleaned) <= 8 and any(char.isalpha() for char in cleaned):
                 return cleaned
         return ""
+
+    def _yc_endpoint_for_query(self, query: str) -> str:
+        normalized = query.lower().replace("_", "-")
+        if "fintech" in normalized:
+            return "industries/fintech.json"
+        if "healthcare" in normalized or "health care" in normalized:
+            return "industries/healthcare.json"
+        if "developer tool" in normalized or "devtool" in normalized:
+            return "tags/developer-tools.json"
+        if "ai" in normalized or "artificial intelligence" in normalized:
+            return "tags/ai.json"
+        if "hiring" in normalized:
+            return "companies/hiring.json"
+        if "top" in normalized:
+            return "companies/top.json"
+        for season in ["winter", "spring", "summer", "fall"]:
+            marker = f"{season}-"
+            if marker in normalized:
+                year = normalized.split(marker, 1)[1][:4]
+                if year.isdigit():
+                    return f"batches/{season}-{year}.json"
+        return "companies/top.json"
+
+    def _adapter_triggered(self, query: str, domain: str, skill: str) -> bool:
+        query_l = query.lower()
+        from workflow_contracts import get_skill_adapter_matrix
+
+        for adapter in get_skill_adapter_matrix(domain).get(domain, []):
+            if adapter["skill"] != skill:
+                continue
+            return any(str(term).lower() in query_l for term in adapter.get("trigger_terms", []))
+        return False
+
+    def _finance_skill_path(self, skill: str) -> Optional[Path]:
+        root = self.repo_root / "vendor" / "finance" / "plugins"
+        matches = list(root.glob(f"*/skills/{skill}/SKILL.md"))
+        return matches[0] if matches else None
 
     def _retrieval_tool_for(self, source_type: str) -> str:
         return {

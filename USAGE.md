@@ -153,7 +153,7 @@ python bin/search_agent.py --workflow-continue-from-sources --state-file search_
 | `media_source_hunter` | Firecrawl 搜索/抓取 | `FIRECRAWL_API_KEY` |
 | `rss_news_hunter` | `finance-rss-reader/scripts/rss_fetch.py` | 无必需 key；可选 `SEARCH_AGENT_RSS_MAX_SOURCES` |
 | `ugc_social_hunter` | `bili search ... --json` | 安装 `bili`；其他平台后续通过 agent-reach/opencli 扩展 |
-| `finance_data_hunter` | `scripts/yfinance_snapshot.py` + `yfinance-data` | `pip install -r requirements.txt` |
+| `finance_data_hunter` | `scripts/yfinance_snapshot.py` + `yc-reader` + Funda/opencli setup adapters | `pip install -r requirements.txt`；Funda/opencli 按需配置 |
 | `marketing_intelligence_hunter` | 本地 marketing skill catalog | 无必需 key；输出 method source，不当作市场事实 |
 
 常用 hunter id：

@@ -82,7 +82,7 @@
 
 **LLM判断**：判断需要哪类结构化金融数据回答问题，区分单一数字、财报指标、估值、市场情绪和风险数据。
 
-**skill/tool调用**：`yfinance-data`、`funda-data`、`tradingview-reader`、`finance-sentiment`。
+**skill/tool调用**：`yfinance-data`、`yc-reader`、`funda-data`、`twitter-reader`、`opencli-reader`、`tradingview-reader`、`finance-sentiment`。
 
 **输出artifact**：`SourceListFragment rows with FIN### ids`
 

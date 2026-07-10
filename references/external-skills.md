@@ -83,9 +83,16 @@ else:
 |---|---|---|
 | 美股实时价格/财务 | `finance-skills/yfinance-data` | 价格、财务、期权、股息、财报日期 |
 | 分析师研究合成 | `finance-skills/funda-data` | 60+ 端点，MCP 服务 + REST 兜底 |
+| YC 创业公司数据库 | `finance-skills/yc-reader` | YC 公司、批次、赛道、招聘状态；公开 API，无需登录 |
+| 金融社媒/网页兜底 | `finance-skills/twitter-reader` / `opencli-reader` | Twitter/X 舆情、Reddit/雪球/Reuters/Bloomberg 等 opencli 只读来源 |
 | 完整期权链 | `finance-skills/tradingview-reader` | 期权链 + Greeks + IV + 图表状态 |
 | 中东地缘风险监控 | `finance-skills/hormuz-strait` | 航运、油价、保险风险时间线 |
 | 股票情绪 | `finance-skills/finance-sentiment` | Reddit / X / 新闻 / Polymarket |
+
+当前执行层已接入：
+- `yc-reader`：真实读取 `yc-oss` 公开 API，输出 `FIN###`。
+- `funda-data`：检测 `FUNDA_API_KEY` / Funda MCP 是否可用；未配置时输出 setup required，不伪造数据。
+- `twitter-reader` / `opencli-reader`：检测 `opencli` 与 Browser Bridge；未配置时输出 setup required，且保持只读边界。
 
 ### 营销/竞对数据源（补 Layer 3-4 深度分析）
 

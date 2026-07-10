@@ -174,7 +174,7 @@ python bin/search_agent.py --workflow-continue-from-sources --state-file search_
 | `media_source_hunter` | Firecrawl wrapper | Deep media/web discovery; requires `FIRECRAWL_API_KEY`. |
 | `rss_news_hunter` | `finance-rss-reader` | RSS/news aggregation with `relevance_score`; independent from Firecrawl key. |
 | `ugc_social_hunter` | `bili` CLI | Bilibili video discussion signal; low confidence until Source QA corroborates. |
-| `finance_data_hunter` | `yfinance_snapshot.py` | Yahoo Finance/yfinance market snapshot; install `requirements.txt`. |
+| `finance_data_hunter` | `yfinance_snapshot.py` + `yc-reader` + Funda/opencli adapters | yfinance ticker snapshots; YC public API for startup data; Funda/Twitter/opencli emit setup-aware routing rows when credentials or bridge are missing. |
 | `marketing_intelligence_hunter` | marketing skill catalog | Routes to method skills such as `marketing-plan` and `marketing-ideas`; not market evidence by itself. |
 
 需要查看某个 phase 要派发哪些子 Agent 时，导出 node packets：

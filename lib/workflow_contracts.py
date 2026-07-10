@@ -1552,7 +1552,7 @@ SKILL_ADAPTER_MATRIX: Dict[str, List[Dict[str, Any]]] = {
         },
         {
             "skill": "twitter-reader",
-            "nodes": ["ugc_social_hunter", "finance_specialist"],
+            "nodes": ["finance_data_hunter", "ugc_social_hunter", "finance_specialist"],
             "trigger_terms": ["twitter", "x.com", "fintwit", "推特", "tweets", "市场情绪"],
             "why_use": "适合金融实时舆论、分析师观点和突发事件跟踪。",
             "how_to_use": "通过 opencli 只读搜索或读取 feed，输出低/中置信度 UGC 来源。",
@@ -1592,7 +1592,7 @@ SKILL_ADAPTER_MATRIX: Dict[str, List[Dict[str, Any]]] = {
         },
         {
             "skill": "opencli-reader",
-            "nodes": ["official_source_hunter", "media_source_hunter", "ugc_social_hunter"],
+            "nodes": ["finance_data_hunter", "official_source_hunter", "media_source_hunter", "ugc_social_hunter"],
             "trigger_terms": ["opencli", "reddit", "xueqiu", "雪球", "微博", "知乎", "substack", "youtube"],
             "why_use": "作为没有专门 reader 时的只读兜底，覆盖财经和中文平台。",
             "how_to_use": "优先专用 reader；无专用 reader 时用 opencli 读取页面/搜索结果。",
@@ -2282,14 +2282,18 @@ def select_skill_adapters(
     domains = [domain] if domain else list(SKILL_ADAPTER_MATRIX.keys())
     for current_domain in domains:
         for adapter in SKILL_ADAPTER_MATRIX.get(current_domain, []):
-            score = 0
-            if node_id and node_id in adapter.get("nodes", []):
-                score += 2
+            trigger_score = 0
             for term in adapter.get("trigger_terms", []):
                 term_l = str(term).lower()
                 if term_l and term_l in query_l:
-                    score += 3
-            if adapter["skill"] in {"marketing-plan", "marketing-ideas", "yfinance-data"}:
+                    trigger_score += 3
+            is_default = adapter["skill"] in {"marketing-plan", "marketing-ideas", "yfinance-data"}
+            if not trigger_score and not is_default:
+                continue
+            score = trigger_score
+            if node_id and node_id in adapter.get("nodes", []):
+                score += 2
+            if is_default:
                 score += 1
             if score:
                 selected = deepcopy(adapter)

@@ -260,6 +260,151 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertEqual(fragment["sources"], [])
         self.assertIn("yfinance", fragment["warnings"][0])
 
+    def test_finance_data_hunter_uses_yc_reader_public_api(self):
+        from source_hunter_executor import SourceHunterExecutor
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b"""
+                [
+                  {
+                    "name": "Stripe",
+                    "one_liner": "Economic infrastructure for the internet.",
+                    "batch": "Summer 2009",
+                    "team_size": 7000,
+                    "isHiring": true,
+                    "website": "https://stripe.com",
+                    "slug": "stripe"
+                  }
+                ]
+                """
+
+        captured_urls = []
+
+        def fake_urlopen(url, timeout=0):
+            captured_urls.append(url)
+            return FakeResponse()
+
+        executor = SourceHunterExecutor(env={})
+        search_plan = {
+            "tasks": [
+                {
+                    "task_id": "FIN-T002",
+                    "assigned_hunter": "finance_data_hunter",
+                    "dimension": "创业公司生态",
+                    "query_en": ["YC fintech companies hiring"],
+                    "query_zh": [],
+                    "source_layers": ["finance_data"],
+                    "expected_evidence": ["YC company public data"],
+                    "source_id_prefix": "FIN",
+                }
+            ]
+        }
+
+        with patch("source_hunter_executor.urlopen", side_effect=fake_urlopen):
+            fragment = executor.run_hunter("finance_data_hunter", search_plan, limit_per_query=3)
+
+        self.assertEqual(fragment["execution_status"], "completed")
+        self.assertIn("industries/fintech.json", captured_urls[0])
+        self.assertEqual(fragment["sources"][0]["retrieval_tool"], "yc-reader")
+        self.assertEqual(fragment["sources"][0]["publisher"], "yc-oss/api")
+        self.assertIn("Stripe", fragment["sources"][0]["title"])
+        self.assertIn("team_size: 7000", fragment["sources"][0]["key_facts"][0])
+
+    def test_finance_data_hunter_routes_funda_without_key_as_setup_required(self):
+        from source_hunter_executor import SourceHunterExecutor
+
+        executor = SourceHunterExecutor(env={})
+        search_plan = {
+            "tasks": [
+                {
+                    "task_id": "FIN-T003",
+                    "assigned_hunter": "finance_data_hunter",
+                    "dimension": "分析师研究",
+                    "query_en": ["funda DCF comps transcript supply chain"],
+                    "query_zh": [],
+                    "source_layers": ["finance_data"],
+                    "expected_evidence": ["Funda setup status"],
+                    "source_id_prefix": "FIN",
+                }
+            ]
+        }
+
+        fragment = executor.run_hunter("finance_data_hunter", search_plan, limit_per_query=3)
+
+        self.assertEqual(fragment["execution_status"], "completed")
+        self.assertTrue(any("funda-data" in source["title"] for source in fragment["sources"]))
+        funda = next(source for source in fragment["sources"] if "funda-data" in source["title"])
+        self.assertEqual(funda["retrieval_tool"], "funda-data")
+        self.assertEqual(funda["confidence"], "low")
+        self.assertIn("FUNDA_API_KEY", funda["key_facts"][0])
+        self.assertIn("method source", funda["confidence_rationale"])
+
+    def test_finance_data_hunter_routes_twitter_opencli_missing_setup(self):
+        from source_hunter_executor import SourceHunterExecutor
+
+        executor = SourceHunterExecutor(env={})
+        search_plan = {
+            "tasks": [
+                {
+                    "task_id": "FIN-T004",
+                    "assigned_hunter": "finance_data_hunter",
+                    "dimension": "金融舆情",
+                    "query_en": ["Twitter sentiment on AAPL stock buzz"],
+                    "query_zh": [],
+                    "source_layers": ["finance_data"],
+                    "expected_evidence": ["Twitter setup status"],
+                    "source_id_prefix": "FIN",
+                }
+            ]
+        }
+
+        with patch("source_hunter_executor.shutil.which", return_value=None):
+            fragment = executor.run_hunter("finance_data_hunter", search_plan, limit_per_query=3)
+
+        self.assertEqual(fragment["execution_status"], "completed")
+        self.assertTrue(any("twitter-reader" in source["title"] for source in fragment["sources"]))
+        twitter = next(source for source in fragment["sources"] if "twitter-reader" in source["title"])
+        self.assertEqual(twitter["retrieval_tool"], "twitter-reader")
+        self.assertEqual(twitter["confidence"], "low")
+        self.assertIn("opencli", twitter["key_facts"][0])
+        self.assertIn("read-only", twitter["key_facts"][0])
+
+    def test_finance_data_hunter_routes_generic_opencli_missing_setup(self):
+        from source_hunter_executor import SourceHunterExecutor
+
+        executor = SourceHunterExecutor(env={})
+        search_plan = {
+            "tasks": [
+                {
+                    "task_id": "FIN-T005",
+                    "assigned_hunter": "finance_data_hunter",
+                    "dimension": "外部金融社区",
+                    "query_en": ["read reddit r/wallstreetbets using opencli"],
+                    "query_zh": [],
+                    "source_layers": ["finance_data"],
+                    "expected_evidence": ["opencli setup status"],
+                    "source_id_prefix": "FIN",
+                }
+            ]
+        }
+
+        with patch("source_hunter_executor.shutil.which", return_value=None):
+            fragment = executor.run_hunter("finance_data_hunter", search_plan, limit_per_query=3)
+
+        self.assertEqual(fragment["execution_status"], "completed")
+        self.assertTrue(any("opencli-reader" in source["title"] for source in fragment["sources"]))
+        opencli = next(source for source in fragment["sources"] if "opencli-reader" in source["title"])
+        self.assertEqual(opencli["retrieval_tool"], "opencli-reader")
+        self.assertEqual(opencli["confidence"], "low")
+        self.assertIn("not installed", opencli["key_facts"][0])
+
     def test_ugc_social_hunter_uses_bilibili_cli_when_available(self):
         from source_hunter_executor import SourceHunterExecutor
 
