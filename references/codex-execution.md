@@ -193,6 +193,21 @@ python bin/search_agent.py --skill-registry
 
 注册表把调用分成四类：`llm_method`（Codex 读取 skill 方法并判断）、`script_cli`（执行本地脚本/CLI）、`api_or_mcp`（外部 API/MCP）、`internal`（本项目内部校验/合并/差异检查）。同时用 `evidence_role` 标明产物用途：`market_evidence`、`structured_data` 可以支撑事实 claim；`method_reference` 只能提供方法和结构；`validator`、`style_only` 不能新增事实。
 
+需要审计本地开源/外部 skill 是否已经被主 workflow 引用：
+
+```bash
+python bin/search_agent.py --skill-coverage
+```
+
+这个审计会分开显示四件事：
+
+- `discovered`：本地文件夹里确实发现了多少个 `SKILL.md`。
+- `registered_or_referenced`：已经被节点注册表、节点契约或 specialist chain 明确引用的 skill。
+- `inventory_only`：只是存在于本地，但还没有进入执行链的 skill。
+- `scope`：该类 skill 在报告里能扮演什么角色。
+
+判断原则：发现 `SKILL.md` 只能证明它是库存；进入 registry/chain 才算被 workflow 知道；只有产出 `CleanSourceList`、`ClaimGraph`、`SpecialistNotes` 或 `ApprovedClaimGraph` 的事实/数据型 skill，才能支撑报告结论。营销、写作、Superpowers 这类方法型 skill 可以影响框架、分析角度、表达质量，但不能单独当作市场事实来源。
+
 Source QA 如果发现数字冲突、关键证据缺口或来源口径不一致，状态机会停在 `source_qa_conflict_resolution`。用户选择口径或补充来源后，Workflow 才能继续进入 Framework Analyst。
 
 R0 执行层的证据链已经扩展为：

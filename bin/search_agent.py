@@ -30,6 +30,7 @@ from report_generator import ReportGenerator
 from source_hunter_executor import HUNTER_CONFIG, SourceHunterExecutor
 from workflow_contracts import (
     render_codex_execution_markdown,
+    render_skill_coverage_audit_markdown,
     render_skill_invocation_registry_markdown,
     render_workflow_playbook_markdown,
 )
@@ -303,6 +304,11 @@ class SearchAgentSkill:
     def print_skill_invocation_registry(self):
         """Print the node-by-node skill invocation registry."""
         print(render_skill_invocation_registry_markdown())
+
+    def print_skill_coverage_audit(self):
+        """Print the discovered-vs-registered skill coverage audit."""
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        print(render_skill_coverage_audit_markdown(repo_root))
 
     def run_workflow_dry_run(self, user_query: str):
         """Run the artifact-only multi-agent workflow for validation."""
@@ -711,6 +717,7 @@ def main():
     parser.add_argument("--auto", action="store_true", help="自动确认框架,跳过人工审核")
     parser.add_argument("--workflow-playbook", action="store_true", help="输出完整子 agent 推进手册")
     parser.add_argument("--skill-registry", action="store_true", help="输出每个节点可调用 skill/tool 的注册表")
+    parser.add_argument("--skill-coverage", action="store_true", help="输出本地开源/外部 skill 的覆盖审计")
     parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
     parser.add_argument("--workflow-resume", type=str, help="根据用户确认/修订意见恢复 gate-driven workflow")
@@ -731,6 +738,10 @@ def main():
 
     if args.skill_registry:
         agent.print_skill_invocation_registry()
+        return
+
+    if args.skill_coverage:
+        agent.print_skill_coverage_audit()
         return
 
     if args.codex_execution:

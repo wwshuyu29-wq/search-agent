@@ -8,6 +8,7 @@ future orchestrators share the same mental model.
 """
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, List
 
 
@@ -879,6 +880,18 @@ SKILL_CHAINS: Dict[str, Dict[str, Any]] = {
             "etf-premium",
         ],
         "step3": ["generative-ui", "options-payoff"],
+        "conditional_extensions": [
+            "discord-reader",
+            "hormuz-strait",
+            "hyperliquid-reader",
+            "linkedin-reader",
+            "saas-valuation-compression",
+            "sepa-strategy",
+            "skill-creator",
+            "telegram-reader",
+            "twitter-reader",
+            "yc-reader",
+        ],
         "logic": [
             "LLM frames the finance question",
             "finance data skill retrieves structured data",
@@ -907,6 +920,33 @@ SKILL_CHAINS: Dict[str, Dict[str, Any]] = {
             "competitor-profiling",
         ],
         "step3": ["marketing-plan", "launch", "emails", "content-strategy", "seo-audit", "pricing"],
+        "conditional_extensions": [
+            "ai-seo",
+            "aso",
+            "churn-prevention",
+            "co-marketing",
+            "cold-email",
+            "community-marketing",
+            "competitors",
+            "cro",
+            "free-tools",
+            "image",
+            "lead-magnets",
+            "marketing-psychology",
+            "offers",
+            "onboarding",
+            "paywalls",
+            "popups",
+            "programmatic-seo",
+            "prospecting",
+            "referrals",
+            "revops",
+            "sales-enablement",
+            "signup",
+            "site-architecture",
+            "sms",
+            "video",
+        ],
         "logic": [
             "LLM clarifies growth, positioning, funnel, or campaign decision",
             "marketing skill supplies domain method or evidence structure",
@@ -935,6 +975,34 @@ SKILL_CHAINS: Dict[str, Dict[str, Any]] = {
             "Separate brand perception, operating metric, and market-pricing evidence.",
         ],
     },
+}
+
+
+PROCESS_SKILL_REFERENCES = {
+    "superpowers": [
+        "using-superpowers",
+        "brainstorming",
+        "test-driven-development",
+        "verification-before-completion",
+        "executing-plans",
+        "writing-plans",
+        "dispatching-parallel-agents",
+        "subagent-driven-development",
+        "systematic-debugging",
+        "finishing-a-development-branch",
+        "requesting-code-review",
+        "receiving-code-review",
+        "using-git-worktrees",
+        "writing-skills",
+    ],
+    "writing": [
+        "humanizer",
+        "humanizer-zh",
+        "copy-editing",
+        "copywriting",
+        "content-strategy",
+        "build-report",
+    ],
 }
 
 
@@ -1486,6 +1554,94 @@ def get_skill_invocations_for_node(node_id: str) -> List[Dict[str, Any]]:
     ]
 
 
+def get_skill_coverage_audit(repo_root: Any = None) -> Dict[str, Any]:
+    """Audit discovered local skills against workflow registry references."""
+    root = Path(repo_root or Path(__file__).resolve().parents[1])
+    referenced = _referenced_skill_names()
+
+    category_specs = [
+        {
+            "category": "marketing",
+            "discovered": _discover_skill_names(root / "vendor" / "marketing" / "skills"),
+            "runtime_scope_note": "Runtime marketing skills are used as method references unless backed by external evidence.",
+        },
+        {
+            "category": "finance",
+            "discovered": _discover_finance_skill_names(root / "vendor" / "finance" / "plugins"),
+            "runtime_scope_note": "Finance data skills may directly support structured data claims when dependencies/API keys are configured.",
+        },
+        {
+            "category": "writing",
+            "discovered": _discover_writing_skill_names(root),
+            "runtime_scope_note": "Writing skills are style/structure helpers; they cannot change facts, source_ids, or risk boundaries.",
+        },
+        {
+            "category": "superpowers",
+            "discovered": _discover_superpowers_skill_names(),
+            "runtime_scope_note": "Superpowers are development/process guardrails for building and verifying the skill, not report evidence.",
+        },
+    ]
+
+    categories = []
+    for spec in category_specs:
+        discovered = sorted(set(spec["discovered"]))
+        registered_or_referenced = sorted(name for name in discovered if name in referenced)
+        inventory_only = sorted(name for name in discovered if name not in referenced)
+        categories.append(
+            {
+                "category": spec["category"],
+                "discovered_count": len(discovered),
+                "discovered": discovered,
+                "registered_or_referenced": registered_or_referenced,
+                "inventory_only": inventory_only,
+                "runtime_scope_note": spec["runtime_scope_note"],
+            }
+        )
+
+    return {
+        "categories": categories,
+        "referenced_skill_names": sorted(referenced),
+        "policy": [
+            "A local SKILL.md file is inventory, not an executable workflow step.",
+            "Runtime use requires a registry entry, node contract reference, or specialist skill chain reference.",
+            "Method/reference skills cannot directly support factual claims without CleanSourceList evidence.",
+        ],
+    }
+
+
+def render_skill_coverage_audit_markdown(repo_root: Any = None) -> str:
+    """Render a readable skill coverage audit."""
+    audit = get_skill_coverage_audit(repo_root)
+    lines = [
+        "# Skill Coverage Audit",
+        "",
+        "这份审计把本地已发现的 skill 和 workflow 已明确调度的 skill 分开，避免把库存误认为已经接入执行链。",
+        "",
+    ]
+    for category in audit["categories"]:
+        lines.extend(
+            [
+                f"## {category['category']}",
+                "",
+                f"- discovered: {category['discovered_count']}",
+                f"- registered_or_referenced: {len(category['registered_or_referenced'])}",
+                f"- inventory_only: {len(category['inventory_only'])}",
+                f"- scope: {category['runtime_scope_note']}",
+                "",
+                "**registered_or_referenced**:",
+                ", ".join(f"`{name}`" for name in category["registered_or_referenced"]) or "_none_",
+                "",
+                "**inventory_only examples**:",
+                ", ".join(f"`{name}`" for name in category["inventory_only"][:20]) or "_none_",
+                "",
+            ]
+        )
+    lines.extend(["## Policy", ""])
+    for policy in audit["policy"]:
+        lines.append(f"- {policy}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def get_rss_relevance_contract() -> Dict[str, Any]:
     """Return the RSS relevance score contract."""
     return deepcopy(RSS_RELEVANCE_CONTRACT)
@@ -1607,6 +1763,61 @@ def _as_list(value: Any) -> List[Any]:
 
 def _format_inline_list(value: Any) -> str:
     return "；".join(str(item) for item in _as_list(value))
+
+
+def _discover_skill_names(skill_root: Path) -> List[str]:
+    if not skill_root.exists():
+        return []
+    return sorted(path.parent.name for path in skill_root.glob("*/SKILL.md"))
+
+
+def _discover_finance_skill_names(finance_plugins_root: Path) -> List[str]:
+    if not finance_plugins_root.exists():
+        return []
+    return sorted(path.parent.name for path in finance_plugins_root.glob("*/skills/*/SKILL.md"))
+
+
+def _discover_writing_skill_names(repo_root: Path) -> List[str]:
+    names = set(PROCESS_SKILL_REFERENCES["writing"])
+    marketing_root = repo_root / "vendor" / "marketing" / "skills"
+    for name in ["copy-editing", "copywriting", "content-strategy", "public-relations", "emails"]:
+        if (marketing_root / name / "SKILL.md").exists():
+            names.add(name)
+    for root in [Path.home() / ".codex" / "skills", Path.home() / ".agents" / "skills"]:
+        for name in ["humanizer", "humanizer-zh", "copy-editing", "copywriting", "content-strategy"]:
+            if (root / name / "SKILL.md").exists():
+                names.add(name)
+    return sorted(names)
+
+
+def _discover_superpowers_skill_names() -> List[str]:
+    names = set(PROCESS_SKILL_REFERENCES["superpowers"])
+    root = Path.home() / ".codex" / "plugins" / "cache" / "openai-curated-remote" / "superpowers" / "6.1.1" / "skills"
+    if root.exists():
+        names.update(path.parent.name for path in root.glob("*/SKILL.md"))
+    return sorted(names)
+
+
+def _referenced_skill_names() -> set:
+    text_parts: List[str] = []
+    for entry in SKILL_INVOCATION_REGISTRY:
+        text_parts.append(str(entry.get("skill_or_tool", "")))
+    for node in NODE_CONTRACTS:
+        text_parts.extend(str(item) for item in _as_list(node.get("tool_or_skill_use", [])))
+    for chain in SKILL_CHAINS.values():
+        for value in chain.values():
+            if isinstance(value, list):
+                text_parts.extend(str(item) for item in value)
+    for values in PROCESS_SKILL_REFERENCES.values():
+        text_parts.extend(values)
+
+    text = "\n".join(text_parts)
+    names = set()
+    for token in text.replace("/", " ").replace(",", " ").replace(";", " ").split():
+        cleaned = token.strip("`*：:()[]，。")
+        if cleaned:
+            names.add(cleaned)
+    return names
 
 
 def _report_family_by_id(report_id: str) -> Dict[str, Any]:

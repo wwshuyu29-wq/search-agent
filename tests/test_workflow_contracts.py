@@ -67,6 +67,7 @@ class WorkflowContractsTest(unittest.TestCase):
 
     def test_skill_invocation_registry_covers_nodes_and_evidence_roles(self):
         from workflow_contracts import (
+            get_skill_coverage_audit,
             get_node_contracts,
             get_skill_invocation_registry,
             get_skill_invocations_for_node,
@@ -112,6 +113,28 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("marketing_intelligence_hunter", markdown)
         self.assertIn("method_reference", markdown)
         self.assertIn("Can Support Claim", markdown)
+
+        audit = get_skill_coverage_audit(REPO_ROOT)
+        categories = {category["category"]: category for category in audit["categories"]}
+        self.assertIn("marketing", categories)
+        self.assertIn("finance", categories)
+        self.assertIn("writing", categories)
+        self.assertIn("superpowers", categories)
+        self.assertGreaterEqual(categories["marketing"]["discovered_count"], 40)
+        self.assertGreaterEqual(categories["finance"]["discovered_count"], 20)
+        self.assertIn("marketing-plan", categories["marketing"]["registered_or_referenced"])
+        self.assertIn("yfinance-data", categories["finance"]["registered_or_referenced"])
+        self.assertIn("humanizer-zh", categories["writing"]["registered_or_referenced"])
+        self.assertIn("test-driven-development", categories["superpowers"]["registered_or_referenced"])
+        self.assertIn("verification-before-completion", categories["superpowers"]["registered_or_referenced"])
+        self.assertTrue(categories["superpowers"]["runtime_scope_note"])
+
+        self.assertIn("onboarding", categories["marketing"]["registered_or_referenced"])
+        self.assertIn("referrals", categories["marketing"]["registered_or_referenced"])
+        self.assertIn("programmatic-seo", categories["marketing"]["registered_or_referenced"])
+        self.assertIn("twitter-reader", categories["finance"]["registered_or_referenced"])
+        self.assertIn("saas-valuation-compression", categories["finance"]["registered_or_referenced"])
+        self.assertIn("brainstorming", categories["superpowers"]["registered_or_referenced"])
 
     def test_rss_relevance_threshold_contract_explains_0_6_as_fetch_gate(self):
         from workflow_contracts import get_rss_relevance_contract

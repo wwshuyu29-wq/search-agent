@@ -116,6 +116,20 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("marketing-plan", printed)
         self.assertIn("Can Support Claim", printed)
 
+    def test_cli_can_print_skill_coverage_audit(self):
+        agent = SearchAgentSkill()
+
+        with patch("builtins.print") as mocked_print:
+            agent.print_skill_coverage_audit()
+
+        printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+        self.assertIn("# Skill Coverage Audit", printed)
+        self.assertIn("## marketing", printed)
+        self.assertIn("## finance", printed)
+        self.assertIn("## writing", printed)
+        self.assertIn("## superpowers", printed)
+        self.assertIn("inventory_only", printed)
+
     def test_cli_can_run_workflow_dry_run(self):
         agent = SearchAgentSkill()
 

@@ -179,6 +179,12 @@ python bin/search_agent.py --workflow-playbook
 python bin/search_agent.py --skill-registry
 ```
 
+想盘点本地营销、金融、写作、Superpowers skill 哪些已接入 workflow、哪些还只是库存：
+
+```bash
+python bin/search_agent.py --skill-coverage
+```
+
 想确认 Codex 里 LLM 到底怎么被调用：
 
 ```bash
@@ -553,6 +559,7 @@ python3 bin/search_agent.py --workflow-packets step1_parallel_source_hunting --s
 python3 bin/search_agent.py --execute-source-hunters --state-file search_agent_state.json --limit-per-query 5
 python3 bin/search_agent.py --workflow-continue-from-sources --state-file search_agent_state.json
 python3 bin/search_agent.py --skill-registry
+python3 bin/search_agent.py --skill-coverage
 python3 bin/search_agent.py --workflow-playbook
 python3 bin/search_agent.py --codex-execution
 ```

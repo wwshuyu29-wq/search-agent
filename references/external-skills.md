@@ -6,8 +6,8 @@
 
 | 仓库 | 覆盖领域 | 安装位置建议 |
 |---|---|---|
-| [`coreyhaines31/marketingskills`](https://github.com/coreyhaines31/marketingskills) | 44 个营销/增长/SEO/内容/CRO 技能 | `~/.codex/skills/marketing/` 或 `~/.claude/skills/` |
-| [`himself65/finance-skills`](https://github.com/himself65/finance-skills) | 20+ 金融/估值/情绪/市场数据技能（6 大 plugin 分组） | `~/.codex/skills/finance/` 或 `~/.claude/skills/` |
+| [`coreyhaines31/marketingskills`](https://github.com/coreyhaines31/marketingskills) | 本项目当前发现 45 个营销/增长/SEO/内容/CRO 技能 | `~/.codex/skills/marketing/` 或 `~/.claude/skills/` |
+| [`himself65/finance-skills`](https://github.com/himself65/finance-skills) | 本项目当前发现 25 个金融/估值/情绪/市场数据技能（6 大 plugin 分组） | `~/.codex/skills/finance/` 或 `~/.claude/skills/` |
 
 安装方式（Codex）：
 
@@ -18,6 +18,19 @@ git clone https://github.com/himself65/finance-skills.git finance
 ```
 
 Codex 启动时会自动扫描并注册这些 skill；search-agent skill 在下述节点会**通过 skill 调用**它们。
+
+如需检查这些开源 skill 是否已经被 search-agent 主链路引用：
+
+```bash
+python bin/search_agent.py --skill-coverage
+```
+
+审计结果里：
+- `discovered` 表示本地确实发现的 skill 库存。
+- `registered_or_referenced` 表示已经进入节点注册表、节点契约或 specialist chain。
+- `inventory_only` 表示还只是库存，后续需要补执行适配器或路由规则。
+
+注意：营销和写作类 skill 多数是**方法/结构/表达辅助**，不能单独作为市场事实来源。金融数据类 skill、RSS、Firecrawl、官方披露等真实数据源，才可以在 Source QA 通过后支撑报告里的事实 claim。
 
 ---
 
@@ -206,16 +219,16 @@ Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skil
 
 ## 完整外部 skill 清单
 
-### `himself65/finance-skills` （6 plugins / 20+ skills）
+### `himself65/finance-skills` （6 plugins / 当前发现 25 skills）
 
 **data-providers**：yfinance-data · funda-data
 **market-analysis**：company-valuation · earnings-preview · earnings-recap · estimate-analysis · etf-premium · options-payoff · saas-valuation-compression · sepa-strategy · stock-correlation · stock-liquidity
 **social-readers**：finance-sentiment · hormuz-strait · tradingview-reader
 **startup-tools**：startup-analysis
 **ui-tools**：generative-ui
-**skill-creator**：finance-skill-creator（元 skill）
+**skill-creator**：skill-creator（元 skill）
 
-### `coreyhaines31/marketingskills` （44 skills）
+### `coreyhaines31/marketingskills` （当前发现 45 skills）
 
 **转化优化 CRO**：cro · signup · onboarding · popups · paywalls
 **内容与文案**：copywriting · copy-editing · cold-email · emails · social · image · video · sms
