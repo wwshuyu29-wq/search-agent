@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from workflow_contracts import select_skill_adapters
+
 
 SearchRunner = Callable[..., List[Dict[str, Any]]]
 
@@ -254,61 +256,35 @@ class SourceHunterExecutor:
         return results
 
     def _marketing_skill_runner(self, query: str, *, limit: int, lang: str, hunter_id: str):
-        skill_specs = [
-            {
-                "skill": "marketing-plan",
-                "path": self.repo_root / "vendor" / "marketing" / "skills" / "marketing-plan" / "SKILL.md",
-                "triggers": {"营销方案", "增长", "gtm", "go-to-market", "aarrr", "计划", "roadmap"},
-                "summary": "Builds AARRR marketing plans, 90-day roadmap, 12-month outlook, measurement, RACI, and skill/tool mapping.",
-            },
-            {
-                "skill": "marketing-ideas",
-                "path": self.repo_root / "vendor" / "marketing" / "skills" / "marketing-ideas" / "SKILL.md",
-                "triggers": {"想法", "创意", "增长", "ideas", "idea", "获客", "推广"},
-                "summary": "Provides tactical marketing ideas that can be mapped to funnel stage and execution constraints.",
-            },
-            {
-                "skill": "competitor-profiling",
-                "path": self.repo_root / "vendor" / "marketing" / "skills" / "competitor-profiling" / "SKILL.md",
-                "triggers": {"竞品", "竞争", "competitor", "competitive", "对手", "profiling"},
-                "summary": "Profiles competitor positioning, pages, pricing, SEO, reviews, and comparable market evidence.",
-            },
-            {
-                "skill": "customer-research",
-                "path": self.repo_root / "vendor" / "marketing" / "skills" / "customer-research" / "SKILL.md",
-                "triggers": {"用户", "客户", "人群", "痛点", "需求", "customer", "icp"},
-                "summary": "Structures customer/ICP research, pain points, buying triggers, and segment evidence needs.",
-            },
-            {
-                "skill": "product-marketing",
-                "path": self.repo_root / "vendor" / "marketing" / "skills" / "product-marketing" / "SKILL.md",
-                "triggers": {"定位", "stp", "positioning", "产品营销", "卖点", "messaging"},
-                "summary": "Supports positioning, ICP, messaging, category claim, and product marketing context.",
-            },
-        ]
-        normalized_query = query.lower()
-        selected = []
-        for spec in skill_specs:
-            trigger_hit = any(trigger.lower() in normalized_query for trigger in spec["triggers"])
-            if trigger_hit or spec["skill"] in {"marketing-plan", "marketing-ideas"}:
-                selected.append(spec)
-        if not selected:
-            selected = skill_specs[:2]
+        selected = select_skill_adapters(
+            query,
+            domain="marketing",
+            node_id="marketing_intelligence_hunter",
+            limit=limit,
+        )
 
         results = []
         for spec in selected[:limit]:
-            path = spec["path"]
+            path = self.repo_root / "vendor" / "marketing" / "skills" / spec["skill"] / "SKILL.md"
             if not path.exists():
                 continue
+            summary = (
+                f"why_use: {spec['why_use']} "
+                f"how_to_use: {spec['how_to_use']} "
+                f"output_artifact: {spec['output_artifact']} "
+                f"use_well: {spec['use_well']}"
+            )
             results.append(
                 {
                     "title": f"{spec['skill']} skill routing",
                     "url": str(path),
-                    "summary": spec["summary"],
+                    "summary": summary,
                     "source": "local marketing skill",
                     "confidence": "medium",
                     "full_text_fetched": True,
                     "method_source": True,
+                    "evidence_role": spec["evidence_role"],
+                    "selection_score": spec["selection_score"],
                     "fetcher": "marketing-skills-catalog",
                 }
             )

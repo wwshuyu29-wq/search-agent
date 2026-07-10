@@ -375,8 +375,37 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertEqual(first["retrieval_tool"], "marketing-skills-catalog")
         self.assertIn("vendor/marketing/skills", first["url"])
         self.assertIn("method source", first["confidence_rationale"])
+        self.assertIn("why_use:", first["key_facts"][0])
+        self.assertIn("output_artifact:", first["key_facts"][0])
         self.assertTrue(any("marketing-plan" in source["title"] for source in fragment["sources"]))
         self.assertTrue(any("marketing-ideas" in source["title"] for source in fragment["sources"]))
+
+    def test_marketing_intelligence_hunter_selects_fine_grained_skill(self):
+        from source_hunter_executor import SourceHunterExecutor
+
+        executor = SourceHunterExecutor(env={})
+        search_plan = {
+            "tasks": [
+                {
+                    "task_id": "MKT-T002",
+                    "assigned_hunter": "marketing_intelligence_hunter",
+                    "dimension": "用户激活",
+                    "query_zh": ["百度地图 新用户 激活 onboarding aha moment"],
+                    "query_en": [],
+                    "source_layers": ["marketing_intelligence"],
+                    "expected_evidence": ["激活方法和指标"],
+                    "source_id_prefix": "MKT",
+                }
+            ]
+        }
+
+        fragment = executor.run_hunter("marketing_intelligence_hunter", search_plan, limit_per_query=4)
+
+        self.assertEqual(fragment["execution_status"], "completed")
+        self.assertTrue(any("onboarding" in source["title"] for source in fragment["sources"]))
+        onboarding = next(source for source in fragment["sources"] if "onboarding" in source["title"])
+        self.assertIn("time-to-value", onboarding["key_facts"][0])
+        self.assertIn("method source", onboarding["confidence_rationale"])
 
 
 if __name__ == "__main__":

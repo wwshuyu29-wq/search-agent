@@ -185,6 +185,13 @@ python bin/search_agent.py --skill-registry
 python bin/search_agent.py --skill-coverage
 ```
 
+想看每个细分营销/金融 skill 为什么被拿来用、适配哪个节点、怎么用、产出什么 artifact：
+
+```bash
+python bin/search_agent.py --skill-adapter-matrix marketing
+python bin/search_agent.py --skill-adapter-matrix finance
+```
+
 想确认 Codex 里 LLM 到底怎么被调用：
 
 ```bash
@@ -560,6 +567,8 @@ python3 bin/search_agent.py --execute-source-hunters --state-file search_agent_s
 python3 bin/search_agent.py --workflow-continue-from-sources --state-file search_agent_state.json
 python3 bin/search_agent.py --skill-registry
 python3 bin/search_agent.py --skill-coverage
+python3 bin/search_agent.py --skill-adapter-matrix marketing
+python3 bin/search_agent.py --skill-adapter-matrix finance
 python3 bin/search_agent.py --workflow-playbook
 python3 bin/search_agent.py --codex-execution
 ```

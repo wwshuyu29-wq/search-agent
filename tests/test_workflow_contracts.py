@@ -67,11 +67,14 @@ class WorkflowContractsTest(unittest.TestCase):
 
     def test_skill_invocation_registry_covers_nodes_and_evidence_roles(self):
         from workflow_contracts import (
+            get_skill_adapter_matrix,
             get_skill_coverage_audit,
             get_node_contracts,
             get_skill_invocation_registry,
             get_skill_invocations_for_node,
+            render_skill_adapter_matrix_markdown,
             render_skill_invocation_registry_markdown,
+            select_skill_adapters,
         )
 
         registry = get_skill_invocation_registry()
@@ -135,6 +138,46 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("twitter-reader", categories["finance"]["registered_or_referenced"])
         self.assertIn("saas-valuation-compression", categories["finance"]["registered_or_referenced"])
         self.assertIn("brainstorming", categories["superpowers"]["registered_or_referenced"])
+
+        matrix = get_skill_adapter_matrix()
+        marketing_names = {item["skill"] for item in matrix["marketing"]}
+        finance_names = {item["skill"] for item in matrix["finance"]}
+        self.assertEqual(set(categories["marketing"]["registered_or_referenced"]), marketing_names)
+        self.assertEqual(set(categories["finance"]["registered_or_referenced"]), finance_names)
+        for adapter in matrix["marketing"] + matrix["finance"]:
+            with self.subTest(skill=adapter["skill"]):
+                self.assertTrue(adapter["nodes"])
+                self.assertTrue(adapter["trigger_terms"])
+                self.assertTrue(adapter["why_use"])
+                self.assertTrue(adapter["how_to_use"])
+                self.assertTrue(adapter["output_artifact"])
+                self.assertIn(
+                    adapter["evidence_role"],
+                    {"routing", "market_evidence", "structured_data", "method_reference", "validator", "style_only"},
+                )
+                self.assertTrue(adapter["use_well"])
+
+        selected = select_skill_adapters(
+            "百度地图 新用户 激活 onboarding 留存",
+            domain="marketing",
+            node_id="marketing_intelligence_hunter",
+            limit=5,
+        )
+        self.assertEqual(selected[0]["skill"], "onboarding")
+        self.assertIn("SpecialistNotes", selected[0]["output_artifact"])
+
+        finance_selected = select_skill_adapters(
+            "AAPL Twitter sentiment and stock buzz",
+            domain="finance",
+            node_id="ugc_social_hunter",
+            limit=5,
+        )
+        self.assertTrue(any(item["skill"] == "twitter-reader" for item in finance_selected))
+
+        adapter_markdown = render_skill_adapter_matrix_markdown("marketing")
+        self.assertIn("# Skill Adapter Matrix", adapter_markdown)
+        self.assertIn("### onboarding", adapter_markdown)
+        self.assertIn("why_use", adapter_markdown)
 
     def test_rss_relevance_threshold_contract_explains_0_6_as_fetch_gate(self):
         from workflow_contracts import get_rss_relevance_contract

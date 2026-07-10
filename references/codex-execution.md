@@ -208,6 +208,15 @@ python bin/search_agent.py --skill-coverage
 
 判断原则：发现 `SKILL.md` 只能证明它是库存；进入 registry/chain 才算被 workflow 知道；只有产出 `CleanSourceList`、`ClaimGraph`、`SpecialistNotes` 或 `ApprovedClaimGraph` 的事实/数据型 skill，才能支撑报告结论。营销、写作、Superpowers 这类方法型 skill 可以影响框架、分析角度、表达质量，但不能单独当作市场事实来源。
 
+需要进一步看细分 skill 的适配理由和节点用法：
+
+```bash
+python bin/search_agent.py --skill-adapter-matrix marketing
+python bin/search_agent.py --skill-adapter-matrix finance
+```
+
+这张适配矩阵回答的是另一个问题：不是“本地有没有这个 skill”，而是“当前 workflow 为什么要拿它、在哪个节点拿、拿来产出什么 artifact、怎样才算用得好”。例如 `onboarding` 只在新用户激活/首次使用/留存问题里进入 Marketing Specialist；`twitter-reader` 只作为 UGC/金融情绪来源，不能单独支撑投资判断。
+
 Source QA 如果发现数字冲突、关键证据缺口或来源口径不一致，状态机会停在 `source_qa_conflict_resolution`。用户选择口径或补充来源后，Workflow 才能继续进入 Framework Analyst。
 
 R0 执行层的证据链已经扩展为：

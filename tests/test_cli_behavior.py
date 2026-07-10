@@ -130,6 +130,19 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("## superpowers", printed)
         self.assertIn("inventory_only", printed)
 
+    def test_cli_can_print_skill_adapter_matrix(self):
+        agent = SearchAgentSkill()
+
+        with patch("builtins.print") as mocked_print:
+            agent.print_skill_adapter_matrix("marketing")
+
+        printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
+        self.assertIn("# Skill Adapter Matrix", printed)
+        self.assertIn("## marketing", printed)
+        self.assertIn("### onboarding", printed)
+        self.assertIn("why_use", printed)
+        self.assertIn("output_artifact", printed)
+
     def test_cli_can_run_workflow_dry_run(self):
         agent = SearchAgentSkill()
 

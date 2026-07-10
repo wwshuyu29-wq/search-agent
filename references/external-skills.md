@@ -32,6 +32,15 @@ python bin/search_agent.py --skill-coverage
 
 注意：营销和写作类 skill 多数是**方法/结构/表达辅助**，不能单独作为市场事实来源。金融数据类 skill、RSS、Firecrawl、官方披露等真实数据源，才可以在 Source QA 通过后支撑报告里的事实 claim。
 
+如需查看每个细分 skill 为什么适配当前链路、在哪个节点用、怎么用、产出什么 artifact：
+
+```bash
+python bin/search_agent.py --skill-adapter-matrix marketing
+python bin/search_agent.py --skill-adapter-matrix finance
+```
+
+这张矩阵是后续接真实执行适配器的依据：先判断 skill 是否适配业务问题，再判断它是事实数据源、方法参考、校验器还是表达工具，最后决定它能否进入 SourceList、SpecialistNotes、ClaimGraphPatch 或 ReportDraft。
+
 ---
 
 ## Step 0：意图识别 & 框架路由（强制前置）
