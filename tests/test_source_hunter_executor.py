@@ -73,6 +73,34 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertEqual(row["collected_by"], "Official Source Hunter")
         self.assertIn("Search runner", row["confidence_rationale"])
 
+    def test_runner_timeout_degrades_structurally_and_next_query_continues(self):
+        import subprocess
+        from source_hunter_executor import SourceHunterExecutor
+
+        calls = []
+        def runner(query, **kwargs):
+            calls.append(query)
+            if len(calls) == 1:
+                raise subprocess.TimeoutExpired(["tool"], 5)
+            return [{"title": "ok", "url": "https://example.com", "description": "fact"}]
+
+        executor = SourceHunterExecutor(search_runner=runner)
+        plan = {"tasks": [
+            {"task_id": "T1", "assigned_hunter": "official_source_hunter", "query_zh": ["one"], "query_en": []},
+            {"task_id": "T2", "assigned_hunter": "official_source_hunter", "query_zh": ["two"], "query_en": []},
+        ]}
+        fragment = executor.run_hunter("official_source_hunter", plan)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(fragment["sources"]), 1)
+        self.assertEqual(fragment["warnings"][0]["error_type"], "timeout")
+        self.assertEqual(fragment["execution_status"], "completed_with_warnings")
+
+    def test_normalized_method_source_flag_is_preserved(self):
+        from source_hunter_executor import SourceHunterExecutor
+        executor = SourceHunterExecutor(search_runner=lambda *a, **k: [{"title": "method", "url": "/skill", "summary": "method", "method_source": True}])
+        fragment = executor.run_hunter("marketing_intelligence_hunter", {"tasks": [{"task_id": "T", "assigned_hunter": "marketing_intelligence_hunter", "query_zh": ["x"], "query_en": []}]})
+        self.assertTrue(fragment["sources"][0]["method_source"])
+
     def test_executor_returns_skipped_fragment_when_no_matching_tasks(self):
         from source_hunter_executor import SourceHunterExecutor
 

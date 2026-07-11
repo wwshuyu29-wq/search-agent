@@ -67,6 +67,14 @@ def firecrawl_search(
     for attempt in range(retries + 1):
         try:
             resp = requests.post(FIRECRAWL_ENDPOINT, json=payload, headers=headers, timeout=request_timeout)
+            status = getattr(resp, "status_code", 200)
+            status = status if isinstance(status, int) else 200
+            if status == 429 or 500 <= status < 600:
+                if attempt >= retries:
+                    resp.raise_for_status()
+                retry_after = float(getattr(resp, "headers", {}).get("Retry-After", 0) or 0)
+                time.sleep(min(max(retry_after, backoff_seconds * (attempt + 1)), 30))
+                continue
             break
         except Exception as exc:
             last_error = exc

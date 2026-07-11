@@ -54,7 +54,9 @@ Step 2 结构化分析：
     ↓
 T4 三套候选大纲 + Codex 推荐
     ↓ 用户在 T5 选择/组合/修改并确认
-T6 按 ApprovedOutline 生成正文 + T7 结构/引文审核 + 参考文献表
+T6 确定性 Evidence Synthesis Writer 按 ApprovedOutline 综合多个 claim（无在线 SDK 时不伪称 LLM）
+    ↓
+T7 OutlineCompliance passed → Humanizer → FinalReport → IntegrityDiff passed → final_report_review
 ```
 
 ## 文档索引
@@ -79,8 +81,12 @@ T6 按 ApprovedOutline 生成正文 + T7 结构/引文审核 + 参考文献表
 # 交互式（含审核点）
 python3 bin/search_agent.py "帮我分析英伟达 2026 Q2 财报"
 
-# 自动模式（跳过审核点 ①）
+# 自动模式只推进到大纲闸门，不会替用户批准大纲
 python3 bin/search_agent.py "对比拼多多和淘宝" --auto
+
+# 状态机恢复：先确认 T1，再选择大纲；自定义章节可由 JSON 数组输入
+python3 bin/search_agent.py --workflow-resume 确认 --state-file search_agent_state.json
+python3 bin/search_agent.py --workflow-resume A --sections-file custom-sections.json --state-file search_agent_state.json
 ```
 
 **注意**：CLI 后端 (`lib/*.py`) 的搜索方法目前是 mock 数据示例。Codex 原生流程才能取到真实搜索结果（通过内置的 realtime_search 工具 + Firecrawl 脚本 + 外部 skill）。

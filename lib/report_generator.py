@@ -328,8 +328,11 @@ class ReportGenerator:
         for section_contract in outline_sections:
             heading = section_contract["heading"]
             claim_ids = list(section_contract.get("required_claim_ids", []))
-            section_claims = [claims_by_id[claim_id] for claim_id in claim_ids if claim_id in claims_by_id]
-            paragraphs: List[str] = []
+            missing_claim_ids = [claim_id for claim_id in claim_ids if claim_id not in claims_by_id]
+            if missing_claim_ids:
+                raise ValueError(f"ApprovedOutline requires missing claims: {', '.join(missing_claim_ids)}")
+            section_claims = [claims_by_id[claim_id] for claim_id in claim_ids]
+            paragraphs: List[str] = [f"本节面向{approved_outline.get('target_reader', '读者')}，围绕“{section_contract.get('purpose', '')}”回答“{decision}”。"]
             for claim in section_claims:
                 content = claim.get("content") or claim.get("claim") or claim.get("text") or ""
                 citations = []
@@ -338,7 +341,9 @@ class ReportGenerator:
                     url = source.get("url") or source.get("canonical_url") or ""
                     citations.append(f"[{source_id}]({url})" if url else source_id)
                 suffix = f"（来源：{', '.join(citations)}）" if citations else "（证据：[待补证据]）"
-                paragraphs.append(f"{content}{suffix}")
+                claim_type = claim.get("claim_type", "judgment")
+                type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}.get(claim_type, "判断")
+                paragraphs.append(f"{type_label}：{content}{suffix}")
             if not paragraphs:
                 paragraphs.append(
                     f"[待扩写] 本节需要完成：{section_contract.get('purpose', '')}。"
@@ -352,6 +357,7 @@ class ReportGenerator:
                 "claim_ids": [claim.get("claim_id") for claim in section_claims],
                 "word_budget": section_contract.get("word_budget", 600),
                 "content": "\n\n".join(paragraphs),
+                "actual_word_count": len("".join(paragraphs).replace(" ", "")),
             }
             draft_sections.append(draft_section)
             markdown_parts.extend([f"## {heading}", "", draft_section["content"], ""])

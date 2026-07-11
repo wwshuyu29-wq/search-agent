@@ -105,7 +105,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
                 "step2_analysis_and_specialists",
                 "step2_citation_audit",
                 "step3_report_draft",
-                "step3_humanizer_final",
+                "step3_humanizer",
                 "step3_integrity_check",
             ],
         )
@@ -226,10 +226,10 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         resumed = orchestrator.resume_gate_workflow(state, "确认")
 
         self.assertEqual(resumed["status"], "waiting_for_user")
-        self.assertEqual(resumed["pending_gate"], "final_report_review")
-        self.assertEqual(resumed["current_phase"], "step3_humanizer_final")
-        self.assertIn("FinalReport", resumed["artifacts"])
-        self.assertIn("通过", resumed["next_action"])
+        self.assertEqual(resumed["pending_gate"], "outline_approved_by_user")
+        self.assertEqual(resumed["current_phase"], "step3_outline_approval")
+        self.assertIn("OutlinePlan", resumed["artifacts"])
+        self.assertNotIn("ReportDraft", resumed["artifacts"])
 
     def test_gate_driven_workflow_records_revision_request_instead_of_advancing(self):
         from workflow_orchestrator import WorkflowOrchestrator
@@ -253,7 +253,8 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         state = orchestrator.start_gate_workflow(
             "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
         )
-        waiting_final = orchestrator.resume_gate_workflow(state, "确认")
+        waiting_outline = orchestrator.resume_gate_workflow(state, "确认")
+        waiting_final = orchestrator.resume_gate_workflow(waiting_outline, {"selection": "A"})
 
         completed = orchestrator.resume_gate_workflow(waiting_final, "通过")
 
@@ -292,7 +293,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             "source_quality_notes": ["存在数字冲突，暂停等待用户选口径。"],
         }
 
-        with patch.object(orchestrator, "_build_dry_source_qa", return_value=(conflict_notes, clean_source_list)):
+        with patch.object(orchestrator, "source_qa", return_value=(conflict_notes, clean_source_list)):
             resumed = orchestrator.resume_gate_workflow(state, "确认")
 
         self.assertEqual(resumed["status"], "waiting_for_user")
@@ -326,14 +327,14 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             "source_quality_notes": ["存在数字冲突，暂停等待用户选口径。"],
         }
 
-        with patch.object(orchestrator, "_build_dry_source_qa", return_value=(conflict_notes, clean_source_list)):
+        with patch.object(orchestrator, "source_qa", return_value=(conflict_notes, clean_source_list)):
             waiting_conflict = orchestrator.resume_gate_workflow(state, "确认")
 
         resumed = orchestrator.resume_gate_workflow(waiting_conflict, "采用官方口径")
 
-        self.assertEqual(resumed["pending_gate"], "final_report_review")
+        self.assertEqual(resumed["pending_gate"], "outline_approved_by_user")
         self.assertIn("ClaimGraph", resumed["artifacts"])
-        self.assertIn("FinalReport", resumed["artifacts"])
+        self.assertIn("OutlinePlan", resumed["artifacts"])
         self.assertIn("采用官方口径", resumed["artifacts"]["SourceQANotes"]["user_resolution"])
 
     def test_continue_from_source_fragments_runs_merge_qa_and_report(self):
@@ -371,11 +372,103 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         continued = orchestrator.continue_from_source_fragments(state)
 
-        self.assertEqual(continued["pending_gate"], "final_report_review")
+        self.assertEqual(continued["pending_gate"], "outline_approved_by_user")
         self.assertEqual(continued["artifacts"]["RawSourceList"]["source_count"], 1)
         self.assertIn("CleanSourceList", continued["artifacts"])
-        self.assertIn("FinalReport", continued["artifacts"])
-        self.assertIn("workflow execution report", continued["artifacts"]["FinalReport"]["markdown"])
+        self.assertIn("OutlinePlan", continued["artifacts"])
+        self.assertNotIn("ReportDraft", continued["artifacts"])
+
+    def test_confirmed_audit_stops_at_outline_gate_without_writing_prose(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("高德地图新功能对百度地图的启示")
+        source = {
+            "source_id": "OFF001", "title": "官方更新", "publisher": "高德",
+            "source_type": "official", "publish_date": "2026-07-10",
+            "url": "https://example.com/update", "canonical_url": "https://example.com/update",
+            "confidence": "high", "key_facts": ["上线车道级导航"],
+            "full_text_fetched": True, "collected_by": "Official Source Hunter",
+            "confidence_rationale": "official primary source",
+        }
+        state["artifacts"]["SearchPlan"] = orchestrator.build_search_plan(state["artifacts"]["AuditCard"])
+        state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [source]}]
+
+        waiting = orchestrator.continue_from_source_fragments(state)
+
+        self.assertEqual(waiting["pending_gate"], "outline_approved_by_user")
+        self.assertIn("OutlinePlan", waiting["artifacts"])
+        self.assertEqual(len(waiting["artifacts"]["OutlinePlan"]["candidates"]), 3)
+        self.assertNotIn("ApprovedOutline", waiting["artifacts"])
+        self.assertNotIn("ReportDraft", waiting["artifacts"])
+
+    def test_outline_choice_and_override_are_required_before_final_pipeline(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("测试")
+        state["pending_gate"] = "outline_approved_by_user"
+        state["artifacts"]["ApprovedClaimGraph"] = {
+            "approved_claim_ids": ["CL001"],
+            "claims": [{"claim_id": "CL001", "claim_type": "fact", "text": "事实", "source_ids": ["OFF001"], "audit_status": "passed"}],
+        }
+        state["artifacts"]["CleanSourceList"] = {"sources": [{"source_id": "OFF001", "title": "来源", "url": "https://example.com"}], "approved_source_ids": ["OFF001"], "excluded_source_ids": [], "source_quality_notes": []}
+        state["artifacts"]["OutlinePlan"] = __import__("workflow_contracts").build_outline_candidates(
+            state["artifacts"]["IntentBrief"], ["CL001"]
+        )
+        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 120}]
+
+        completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override})
+
+        self.assertTrue(completed["artifacts"]["ApprovedOutline"]["approved_by_user"])
+        self.assertEqual(completed["artifacts"]["ReportDraft"]["sections"][0]["heading"], "自定义结论")
+        self.assertEqual(completed["artifacts"]["OutlineComplianceReview"]["status"], "passed")
+        self.assertEqual(completed["artifacts"]["IntegrityDiff"]["status"], "passed")
+        self.assertEqual(completed["pending_gate"], "final_report_review")
+
+    def test_citation_audit_blocks_missing_and_method_only_sources(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        clean = {"sources": [
+            {"source_id": "MKT001", "method_source": True},
+            {"source_id": "OFF001", "method_source": False},
+        ], "approved_source_ids": ["MKT001", "OFF001"]}
+        graph = {"claims": [
+            {"claim_id": "CL001", "claim_type": "fact", "text": "市场事实", "source_ids": ["MKT001"], "confidence": "high", "reasoning_basis": "method"},
+            {"claim_id": "CL002", "claim_type": "fact", "text": "缺失", "source_ids": ["NOPE"], "confidence": "high", "reasoning_basis": "missing"},
+        ]}
+
+        audit, approved = orchestrator.audit_claim_graph(graph, clean)
+
+        self.assertEqual(audit["status"], "failed")
+        self.assertEqual(set(audit["blocked_claim_ids"]), {"CL001", "CL002"})
+        self.assertEqual(approved["claims"], [])
+
+    def test_real_source_continuation_never_calls_dry_builders(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("测试")
+        state["artifacts"]["SearchPlan"] = orchestrator.build_search_plan(state["artifacts"]["AuditCard"])
+        state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [{
+            "source_id": "OFF001", "title": "来源", "publisher": "官方", "source_type": "official",
+            "publish_date": "2026-07-10", "url": "https://example.com", "canonical_url": "https://example.com",
+            "confidence": "high", "key_facts": ["真实事实"], "full_text_fetched": True,
+            "collected_by": "Official Source Hunter", "confidence_rationale": "primary",
+        }]}]
+        with patch.object(orchestrator, "_build_dry_source_qa", side_effect=AssertionError("dry called")), \
+             patch.object(orchestrator, "_build_dry_claim_graph", side_effect=AssertionError("dry called")):
+            result = orchestrator.continue_from_source_fragments(state)
+        self.assertEqual(result["pending_gate"], "outline_approved_by_user")
+
+    def test_semantic_validation_rejects_unapproved_outline_and_failed_reviews(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        invalid_outline = {"selected_outline_id": "a", "approved_by_user": False, "report_family": "x", "title": "x", "target_reader": "x", "writing_logic": "x", "sections": []}
+        self.assertFalse(orchestrator.validate_artifact("ApprovedOutline", invalid_outline)["valid"])
+        self.assertFalse(orchestrator.validate_artifact("OutlineComplianceReview", {"status": "failed", "missing_sections": [], "unexpected_sections": [], "order_matches": True, "purpose_gaps": [], "evidence_gaps": []})["valid"])
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator

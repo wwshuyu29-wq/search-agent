@@ -114,6 +114,14 @@ class SourceHunterExecutor:
                     fragment["execution_status"] = "skipped_missing_tool_config"
                     fragment["warnings"].append(str(exc))
                     return fragment
+                except subprocess.TimeoutExpired as exc:
+                    fragment["execution_status"] = "completed_with_warnings"
+                    fragment["warnings"].append({"error_type": "timeout", "query": query, "timeout_seconds": exc.timeout, "message": str(exc)})
+                    continue
+                except Exception as exc:
+                    fragment["execution_status"] = "completed_with_warnings"
+                    fragment["warnings"].append({"error_type": "provider_failure", "query": query, "message": str(exc)})
+                    continue
                 for result in results:
                     fragment["sources"].append(
                         self._normalize_result(
@@ -159,6 +167,7 @@ class SourceHunterExecutor:
             text=True,
             env=self.env,
             check=False,
+            timeout=float(self.env.get("SEARCH_AGENT_SUBPROCESS_TIMEOUT", "60")),
         )
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "firecrawl_search.py failed")
@@ -200,6 +209,7 @@ class SourceHunterExecutor:
             text=True,
             env=self.env,
             check=False,
+            timeout=float(self.env.get("SEARCH_AGENT_SUBPROCESS_TIMEOUT", "60")),
         )
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "rss_fetch.py failed")
@@ -227,6 +237,7 @@ class SourceHunterExecutor:
             text=True,
             env=self.env,
             check=False,
+            timeout=float(self.env.get("SEARCH_AGENT_SUBPROCESS_TIMEOUT", "60")),
         )
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "bili search failed")
@@ -341,6 +352,7 @@ class SourceHunterExecutor:
             text=True,
             env=self.env,
             check=False,
+            timeout=float(self.env.get("SEARCH_AGENT_SUBPROCESS_TIMEOUT", "60")),
         )
         if completed.returncode == 3 or "YFINANCE_NOT_INSTALLED" in completed.stderr:
             raise MissingToolConfig("yfinance is required for finance_data_hunter; install requirements first")
@@ -619,6 +631,7 @@ class SourceHunterExecutor:
             "retrieval_tool": retrieval_tool,
             "relevance_score": result.get("relevance_score"),
             "metrics": result.get("metrics"),
+            "method_source": bool(result.get("method_source", False)),
         }
 
     def _canonical_url(self, url: str) -> str:

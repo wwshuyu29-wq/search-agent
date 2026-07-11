@@ -152,7 +152,7 @@ class CliBehaviorTest(unittest.TestCase):
         printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
         self.assertIn("Multi-Agent Workflow Dry Run", printed)
         self.assertIn("step0_intent_and_audit", printed)
-        self.assertIn("step3_humanizer_final", printed)
+        self.assertIn("step3_humanizer", printed)
         self.assertIn("FinalReport", printed)
         self.assertIn("status: complete", printed)
 
@@ -191,10 +191,10 @@ class CliBehaviorTest(unittest.TestCase):
             saved = json.loads(state_file.read_text(encoding="utf-8"))
             printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
 
-        self.assertEqual(state["pending_gate"], "final_report_review")
-        self.assertEqual(saved["pending_gate"], "final_report_review")
-        self.assertIn("FinalReport", saved["artifacts"])
-        self.assertIn("等待终稿审核", printed)
+        self.assertEqual(state["pending_gate"], "outline_approved_by_user")
+        self.assertEqual(saved["pending_gate"], "outline_approved_by_user")
+        self.assertIn("OutlinePlan", saved["artifacts"])
+        self.assertNotIn("ReportDraft", saved["artifacts"])
 
     def test_cli_can_print_node_packets_from_saved_state(self):
         agent = SearchAgentSkill()
@@ -418,7 +418,7 @@ class CliBehaviorTest(unittest.TestCase):
             saved = json.loads(state_file.read_text(encoding="utf-8"))
             printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
 
-        self.assertEqual(continued["pending_gate"], "final_report_review")
+        self.assertEqual(continued["pending_gate"], "outline_approved_by_user")
         self.assertEqual(saved["artifacts"]["RawSourceList"]["source_count"], 1)
         self.assertIn("Workflow Continued From Source Fragments", printed)
         self.assertIn("raw_sources: 1", printed)

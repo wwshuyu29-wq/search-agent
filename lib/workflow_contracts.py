@@ -849,22 +849,6 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
         "required_fields": ["status", "missing_sections", "unexpected_sections", "order_matches", "purpose_gaps", "evidence_gaps"],
         "quality_rules": ["status=passed before Humanizer", "Structural drift blocks completion"],
     },
-    "ReportDraft": {
-        "producer_nodes": ["report_writer"],
-        "consumer_nodes": ["humanizer_editor"],
-        "required_fields": [
-            "markdown",
-            "report_family",
-            "core_judgment",
-            "supporting_reasons",
-            "risk_section",
-            "reference_table",
-        ],
-        "quality_rules": [
-            "The selected report family matches the audience and decision.",
-            "Every material claim keeps a citation.",
-        ],
-    },
     "HumanizerChangeLog": {
         "producer_nodes": ["humanizer_editor"],
         "consumer_nodes": ["integrity_diff_checker"],
@@ -1066,17 +1050,6 @@ ORCHESTRATION_PLAN: List[Dict[str, Any]] = [
         "parallel": False,
         "gate": "humanizer_integrity_passed",
         "gate_type": "automatic_hard_block",
-        "halts_for_user": False,
-    },
-    {
-        "id": "step3_humanizer_final",
-        "step": "Step 3",
-        "nodes": ["humanizer_editor"],
-        "input_artifacts": ["ReportDraft", "CleanSourceList"],
-        "output_artifacts": ["FinalReport", "HumanizerChangeLog"],
-        "parallel": False,
-        "gate": "final_report_style_only_changes",
-        "gate_type": "automatic",
         "halts_for_user": False,
     },
     {

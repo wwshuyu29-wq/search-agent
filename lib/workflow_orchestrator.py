@@ -9,7 +9,10 @@ from typing import Any, Dict, List
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from workflow_contracts import (
+    approve_outline,
     build_agent_prompt,
+    build_outline_candidates,
+    review_outline_compliance,
     get_artifact_contracts,
     get_node_contracts,
     get_orchestration_plan,
@@ -154,7 +157,7 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
 
         source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
-            self._build_dry_source_qa(raw_source_list["sources"])
+            self.source_qa(raw_source_list["sources"])
         )
         artifacts["SourceQANotes"] = source_qa_notes
         artifacts["ConflictRegister"] = conflict_register
@@ -213,7 +216,7 @@ class WorkflowOrchestrator:
         artifacts["FinalReport"] = final_report
         artifacts["HumanizerChangeLog"] = humanizer_change_log
         validations.extend(self._validate_many({"FinalReport": final_report, "HumanizerChangeLog": humanizer_change_log}))
-        phase_results.append(self._phase_result("step3_humanizer_final", ["FinalReport", "HumanizerChangeLog"]))
+        phase_results.append(self._phase_result("step3_humanizer", ["FinalReport", "HumanizerChangeLog"]))
 
         integrity_diff = self.build_integrity_diff(report_draft, final_report)
         artifacts["IntegrityDiff"] = integrity_diff
@@ -257,7 +260,7 @@ class WorkflowOrchestrator:
     def resume_gate_workflow(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
         """Resume a gate-driven workflow from the user's decision."""
         pending_gate = state.get("pending_gate")
-        normalized_decision = (user_decision or "").strip()
+        normalized_decision = (user_decision or "").strip() if isinstance(user_decision, str) else ""
 
         if pending_gate == "audit_card_confirmed":
             if not self._is_confirmation(normalized_decision):
@@ -271,6 +274,10 @@ class WorkflowOrchestrator:
 
         if pending_gate == "source_qa_conflict_resolution":
             return self._run_after_source_qa_resolution(state, normalized_decision)
+
+        if pending_gate == "outline_approved_by_user":
+            decision = user_decision if isinstance(user_decision, dict) else {"selection": normalized_decision}
+            return self._run_after_outline_approval(state, decision)
 
         if pending_gate == "final_report_review":
             reviewed = deepcopy(state)
@@ -302,6 +309,24 @@ class WorkflowOrchestrator:
             claims = artifact.get("claims", [])
             if not isinstance(claims, list) or not claims:
                 missing.append("claims")
+            for idx, claim in enumerate(claims if isinstance(claims, list) else []):
+                if claim.get("audit_status") != "passed":
+                    missing.append(f"claims[{idx}].audit_status=passed")
+            return missing
+        if artifact_name == "OutlinePlan":
+            missing = [field for field in required_fields if field not in artifact]
+            if len(artifact.get("candidates", [])) != 3:
+                missing.append("candidates.exactly_three")
+            return missing
+        if artifact_name == "ApprovedOutline":
+            missing = [field for field in required_fields if field not in artifact]
+            if artifact.get("approved_by_user") is not True:
+                missing.append("approved_by_user=true")
+            return missing
+        if artifact_name in {"OutlineComplianceReview", "IntegrityDiff"}:
+            missing = [field for field in required_fields if field not in artifact]
+            if artifact.get("status") != "passed":
+                missing.append("status=passed")
             return missing
 
         if not isinstance(artifact, dict):
@@ -487,6 +512,65 @@ class WorkflowOrchestrator:
             "updated_at": now,
         }
 
+    def build_search_plan(self, audit_card: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the deterministic execution plan used by the formal state machine."""
+        return self._build_dry_search_plan(audit_card)
+
+    def source_qa(self, sources: List[Dict[str, Any]]):
+        """Approve only identifiable, usable sources and retain method-source metadata."""
+        approved = []
+        excluded = []
+        missing = []
+        for source in sources:
+            source_id = source.get("source_id")
+            if not source_id or not (source.get("url") or source.get("canonical_url")):
+                excluded.append(source_id or "unknown")
+                missing.append({"source_id": source_id, "reason": "missing source_id or URL"})
+                continue
+            approved.append(source_id)
+        notes = {
+            "deduped_count": len(sources), "removed_duplicates": [], "stale_sources": [],
+            "paywalled_summaries": [], "number_conflicts": [], "missing_evidence": missing,
+            "approved_source_ids": approved, "requires_user_resolution": False,
+        }
+        conflicts = {"conflicts": [], "requires_user_decision": False, "recommended_resolution": "none"}
+        gaps = {"gaps": missing, "requires_refetch": bool(missing), "blocking_gap_count": len(missing)}
+        clean = {"sources": [s for s in sources if s.get("source_id") in approved], "approved_source_ids": approved, "excluded_source_ids": excluded, "source_quality_notes": []}
+        return notes, conflicts, gaps, clean
+
+    def build_claim_graph(self, clean_source_list: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract minimal factual claims from approved source key facts."""
+        claims = []
+        for source in clean_source_list.get("sources", []):
+            if source.get("method_source"):
+                continue
+            for fact in source.get("key_facts", []):
+                if fact:
+                    claims.append({"claim_id": f"CL{len(claims)+1:03d}", "dimension": source.get("source_type", "evidence"), "claim_type": "fact", "text": fact, "source_ids": [source["source_id"]], "confidence": source.get("confidence", "medium"), "reasoning_basis": "verbatim source key fact"})
+        return {"claims": claims}
+
+    def audit_claim_graph(self, claim_graph: Dict[str, Any], clean_source_list: Dict[str, Any]):
+        """Approve factual claims only when all cited, approved sources really exist."""
+        source_map = {s.get("source_id"): s for s in clean_source_list.get("sources", [])}
+        approved_source_ids = set(clean_source_list.get("approved_source_ids", source_map))
+        approved, blocked, issues = [], [], []
+        for claim in claim_graph.get("claims", []):
+            cited = claim.get("source_ids", [])
+            reason = None
+            if claim.get("claim_type") == "fact" and not cited:
+                reason = "fact claim has no source"
+            elif any(sid not in source_map or sid not in approved_source_ids for sid in cited):
+                reason = "source_id missing or not approved"
+            elif claim.get("claim_type") == "fact" and any(source_map[sid].get("method_source") for sid in cited):
+                reason = "method source cannot support market fact"
+            if reason:
+                blocked.append(claim.get("claim_id")); issues.append({"claim_id": claim.get("claim_id"), "reason": reason})
+            else:
+                row = deepcopy(claim); row["audit_status"] = "passed"; approved.append(row)
+        status = "passed" if approved and not blocked else "failed"
+        audit = {"status": status, "issues": issues, "required_rewrites": issues, "approved_claim_ids": [c["claim_id"] for c in approved], "blocked_claim_ids": blocked}
+        return audit, {"approved_claim_ids": audit["approved_claim_ids"], "claims": approved}
+
     def _run_after_audit_confirmation(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
         artifacts = deepcopy(state["artifacts"])
         validations = deepcopy(state.get("validations", []))
@@ -512,7 +596,7 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
 
         source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
-            self._build_dry_source_qa(raw_source_list["sources"])
+            self.source_qa(raw_source_list["sources"])
         )
         artifacts["SourceQANotes"] = source_qa_notes
         artifacts["ConflictRegister"] = conflict_register
@@ -609,10 +693,10 @@ class WorkflowOrchestrator:
         intent_brief = artifacts["IntentBrief"]
         clean_source_list = artifacts["CleanSourceList"]
 
-        claim_graph = self._build_dry_claim_graph(clean_source_list)
+        claim_graph = self.build_claim_graph(clean_source_list)
         artifacts["ClaimGraph"] = claim_graph
-        specialist_notes = self._build_dry_specialist_notes(claim_graph)
-        claim_graph_patch = self._build_dry_claim_graph_patch()
+        specialist_notes = {"specialist": "deterministic evidence analysis", "notes": [], "source_ids": clean_source_list.get("approved_source_ids", []), "risk_boundaries": ["No online LLM SDK was invoked."]}
+        claim_graph_patch = {"patch_id": "PATCH000", "target_claim_ids": [], "new_claims": [], "source_ids": [], "patch_reason": "no specialist patch"}
         artifacts["SpecialistNotes"] = specialist_notes
         artifacts["ClaimGraphPatch"] = claim_graph_patch
         validations.append(self.validate_artifact("ClaimGraph", claim_graph))
@@ -623,39 +707,56 @@ class WorkflowOrchestrator:
             self._phase_result("step2_analysis_and_specialists", ["ClaimGraph", "SpecialistNotes", "ClaimGraphPatch"])
         )
 
-        citation_audit, approved_claim_graph = self._build_dry_citation_audit(claim_graph)
+        citation_audit, approved_claim_graph = self.audit_claim_graph(claim_graph, clean_source_list)
         artifacts["CitationAudit"] = citation_audit
         artifacts["ApprovedClaimGraph"] = approved_claim_graph
         validations.extend(self._validate_many({"CitationAudit": citation_audit, "ApprovedClaimGraph": approved_claim_graph}))
         phase_results.append(self._phase_result("step2_citation_audit", ["CitationAudit", "ApprovedClaimGraph"]))
+        if citation_audit["status"] != "passed":
+            return self._workflow_state("blocked", "step2_citation_audit", "citation_audit_failed", artifacts, validations, phase_results, "Citation audit failed.", user_decision)
+        outline_plan = build_outline_candidates(intent_brief, approved_claim_graph["approved_claim_ids"])
+        artifacts["OutlinePlan"] = outline_plan
+        validations.append(self.validate_artifact("OutlinePlan", outline_plan))
+        phase_results.append(self._phase_result("step3_outline_candidates", ["OutlinePlan"]))
+        return self._workflow_state("waiting_for_user", "step3_outline_approval", "outline_approved_by_user", artifacts, validations, phase_results, "请选择 A/B/C，或提供组合及 sections_override。", user_decision)
 
-        report_draft = self._build_dry_report_draft(intent_brief, clean_source_list, approved_claim_graph)
+    def _run_after_outline_approval(self, state: Dict[str, Any], decision: Dict[str, Any]) -> Dict[str, Any]:
+        artifacts = deepcopy(state["artifacts"])
+        validations = deepcopy(state.get("validations", []))
+        phase_results = deepcopy(state.get("phase_results", []))
+        candidates = artifacts["OutlinePlan"]["candidates"]
+        selection = str(decision.get("selection", "A")).strip().upper()
+        selected_id = candidates[ord(selection) - ord("A")]["outline_id"] if selection in {"A", "B", "C"} else artifacts["OutlinePlan"]["recommended_outline_id"]
+        approved_outline = approve_outline(artifacts["OutlinePlan"], selected_id, approved_by_user=True)
+        if decision.get("sections_override"):
+            approved_outline["sections"] = deepcopy(decision["sections_override"])
+            approved_outline["selected_outline_id"] = selected_id + "_custom"
+        artifacts["ApprovedOutline"] = approved_outline
+        validations.append(self.validate_artifact("ApprovedOutline", approved_outline))
+        phase_results.append(self._phase_result("step3_outline_approval", ["ApprovedOutline"]))
+        from report_generator import ReportGenerator
+        report_draft = ReportGenerator().generate_from_approved_outline(approved_outline, artifacts["ApprovedClaimGraph"]["claims"], artifacts["CleanSourceList"]["sources"], artifacts["IntentBrief"].get("subject", "Research"), artifacts["IntentBrief"].get("user_decision", ""))
         artifacts["ReportDraft"] = report_draft
         validations.append(self.validate_artifact("ReportDraft", report_draft))
         phase_results.append(self._phase_result("step3_report_draft", ["ReportDraft"]))
-
-        final_report, humanizer_change_log = self._build_dry_final_report(report_draft, clean_source_list)
-        artifacts["FinalReport"] = final_report
-        artifacts["HumanizerChangeLog"] = humanizer_change_log
-        validations.extend(self._validate_many({"FinalReport": final_report, "HumanizerChangeLog": humanizer_change_log}))
-        phase_results.append(self._phase_result("step3_humanizer_final", ["FinalReport", "HumanizerChangeLog"]))
-
-        integrity_diff = self.build_integrity_diff(report_draft, final_report)
-        artifacts["IntegrityDiff"] = integrity_diff
-        validations.append(self.validate_artifact("IntegrityDiff", integrity_diff))
+        compliance = review_outline_compliance(approved_outline, report_draft)
+        artifacts["OutlineComplianceReview"] = compliance
+        validations.append(self.validate_artifact("OutlineComplianceReview", compliance))
+        phase_results.append(self._phase_result("step3_outline_compliance", ["OutlineComplianceReview"]))
+        if compliance["status"] != "passed":
+            return self._workflow_state("blocked", "step3_outline_compliance", "outline_compliance_failed", artifacts, validations, phase_results, "Outline compliance failed.")
+        final_report = {"markdown": report_draft["markdown"], "report_family": report_draft["report_family"], "source_count": len(report_draft["references"]), "generated_at": self._timestamp(), "humanizer_notes": ["deterministic style-only pass"]}
+        change_log = {"changed_sections": [], "style_only": True, "unchanged_fact_confirmation": True}
+        artifacts.update({"FinalReport": final_report, "HumanizerChangeLog": change_log})
+        phase_results.append(self._phase_result("step3_humanizer", ["FinalReport", "HumanizerChangeLog"]))
+        integrity = self.build_integrity_diff(report_draft, final_report)
+        if review_outline_compliance(approved_outline, {**report_draft, "markdown": final_report["markdown"]})["status"] != "passed":
+            integrity["status"] = "failed"
+        artifacts["IntegrityDiff"] = integrity
+        validations.extend(self._validate_many({"FinalReport": final_report, "HumanizerChangeLog": change_log, "IntegrityDiff": integrity}))
         phase_results.append(self._phase_result("step3_integrity_check", ["IntegrityDiff"]))
-
-        valid = all(validation["valid"] for validation in validations)
-        return self._workflow_state(
-            status="waiting_for_user" if valid else "blocked",
-            current_phase="step3_humanizer_final",
-            pending_gate="final_report_review" if valid else "artifact_validation_failed",
-            artifacts=artifacts,
-            validations=validations,
-            phase_results=phase_results,
-            next_action="请审核 FinalReport；回复通过完成，或提出具体修订意见。",
-            user_decision=user_decision,
-        )
+        valid = all(v["valid"] for v in validations) and integrity["status"] == "passed"
+        return self._workflow_state("waiting_for_user" if valid else "blocked", "step3_integrity_check", "final_report_review" if valid else "integrity_failed", artifacts, validations, phase_results, "请审核 FinalReport；回复通过完成，或提出具体修订意见。")
 
     def continue_from_source_fragments(self, state: Dict[str, Any], user_decision: str = "source fragments ready") -> Dict[str, Any]:
         """Continue a workflow using already-executed real SourceListFragment artifacts."""
@@ -675,7 +776,7 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
 
         source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
-            self._build_dry_source_qa(raw_source_list["sources"])
+            self.source_qa(raw_source_list["sources"])
         )
         artifacts["SourceQANotes"] = source_qa_notes
         artifacts["ConflictRegister"] = conflict_register
@@ -969,10 +1070,9 @@ class WorkflowOrchestrator:
         }
         approved_claim_graph = {
             "approved_claim_ids": approved_claim_ids,
-            "claims": claim_graph["claims"],
-            "blocked_claim_ids": [],
-            "citation_audit_status": "pass",
+            "claims": [{**deepcopy(claim), "audit_status": "passed"} for claim in claim_graph["claims"]],
         }
+
         return citation_audit, approved_claim_graph
 
     def _build_dry_specialist_notes(self, claim_graph: Dict[str, Any]) -> Dict[str, Any]:
@@ -1023,6 +1123,11 @@ class WorkflowOrchestrator:
             "risk_section": "方法型来源不能单独证明市场事实；缺失关键官方/媒体来源时应补搜后再发布业务结论。",
             "reference_table": [source["source_id"] for source in clean_source_list["sources"]],
             "source_count": source_count,
+            "approved_outline_id": "dry_run_only",
+            "reader": intent_brief.get("audience", "test"),
+            "decision": intent_brief.get("user_decision", "test"),
+            "sections": [{"section_id": "dry", "heading": "支撑理由", "purpose": "dry run", "purpose_addressed": True, "claim_ids": approved_claim_graph["approved_claim_ids"], "word_budget": 100, "content": "\n".join(supporting_reasons)}],
+            "references": clean_source_list["sources"],
         }
 
     def _build_dry_final_report(

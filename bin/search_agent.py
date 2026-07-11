@@ -378,11 +378,17 @@ class SearchAgentSkill:
         print(f"\n下一步: {state['next_action']}")
         return state
 
-    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json") -> Dict:
-        """Resume a persisted gate-driven workflow from a user decision."""
+    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json", sections_file: str = "") -> Dict:
+        """Resume persisted state; optional JSON supplies structured outline overrides."""
         orchestrator = WorkflowOrchestrator()
         previous_state = self._read_workflow_state(state_file)
-        state = orchestrator.resume_gate_workflow(previous_state, user_decision)
+        decision = user_decision
+        if previous_state.get("pending_gate") == "outline_approved_by_user":
+            decision = {"selection": user_decision}
+            if sections_file:
+                with open(sections_file, "r", encoding="utf-8") as handle:
+                    decision["sections_override"] = json.load(handle)
+        state = orchestrator.resume_gate_workflow(previous_state, decision)
         self._write_workflow_state(state, state_file)
 
         print("Gate-Driven Workflow Resumed")
@@ -810,7 +816,8 @@ def main():
     parser.add_argument("--skill-adapter-matrix", nargs="?", const="all", choices=["all", "marketing", "finance"], help="输出细分 skill 适配矩阵")
     parser.add_argument("--workflow-dry-run", action="store_true", help="运行 artifact-only 多 agent 工作流自检")
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
-    parser.add_argument("--workflow-resume", type=str, help="根据用户确认/修订意见恢复 gate-driven workflow")
+    parser.add_argument("--workflow-resume", type=str, help="根据确认、A/B/C 或修订意见恢复工作流")
+    parser.add_argument("--sections-file", type=str, default="", help="包含 sections_override 数组的 JSON 文件")
     parser.add_argument("--workflow-packets", type=str, help="输出某个 phase 的可派发子 agent packet")
     parser.add_argument("--execute-source-hunter", type=str, help="执行指定 Source Hunter 节点并写回 SourceListFragment")
     parser.add_argument("--execute-source-hunters", action="store_true", help="执行全部 Source Hunter 节点并写回 SourceListFragment")
@@ -856,7 +863,7 @@ def main():
         return
 
     if args.workflow_resume:
-        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file)
+        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file, sections_file=args.sections_file)
         return
 
     if args.workflow_packets:

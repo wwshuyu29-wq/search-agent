@@ -121,5 +121,11 @@ class ToolingPreflightTest(unittest.TestCase):
         self.assertIn("Python 3.11 command", by_name)
 
 
+    def test_rss_fetch_uses_default_tls_verification(self):
+        text = (REPO_ROOT / "lib" / "finance-rss-reader" / "scripts" / "rss_fetch.py").read_text(encoding="utf-8")
+        self.assertNotIn("ssl.CERT_NONE", text)
+        self.assertNotIn("check_hostname = False", text)
+
+
 if __name__ == "__main__":
     unittest.main()

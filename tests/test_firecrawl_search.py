@@ -53,6 +53,18 @@ class FirecrawlSearchTest(unittest.TestCase):
         self.assertEqual(results[0]["source_id"], "FC001")
         self.assertEqual(results[0]["title"], "豆包导航")
 
+    def test_firecrawl_retries_429_and_respects_retry_budget(self):
+        firecrawl = load_module("firecrawl_search_http_retry", REPO_ROOT / "scripts" / "firecrawl_search.py")
+        fake_requests = mock.Mock()
+        first = mock.Mock(status_code=429, headers={"Retry-After": "0"})
+        second = mock.Mock(status_code=200, headers={})
+        second.json.return_value = {"data": []}
+        fake_requests.post.side_effect = [first, second]
+        with mock.patch.object(firecrawl, "_require_requests", return_value=fake_requests):
+            result = firecrawl.firecrawl_search("x", 1, "en", "key", retries=1, backoff_seconds=0)
+        self.assertEqual(result, [])
+        self.assertEqual(fake_requests.post.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

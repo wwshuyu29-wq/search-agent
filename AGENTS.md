@@ -15,7 +15,7 @@ Step 1：多源全平台信息检索 → 输出信息源清单（含 source_id +
     ↓
 Step 2：结构化分析 → 按框架子维度逐一分析，每条结论标注来源
     ↓
-Step 3：生成调研报告 → 金字塔结构 + 参考文献区（原文链接可跳转）
+Step 3：CitationAudit 通过 → 三套大纲 → 用户批准 → Evidence Synthesis Writer → OutlineCompliance → Humanizer → IntegrityDiff → 终稿审核
 ```
 
 ---

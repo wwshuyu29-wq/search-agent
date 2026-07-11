@@ -293,5 +293,33 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertNotIn("三个关键发现", report)
 
 
+    def test_evidence_synthesis_requires_all_claims_and_respects_budget(self):
+        from report_generator import ReportGenerator
+        generator = ReportGenerator()
+        outline = {
+            "selected_outline_id": "outline_a", "approved_by_user": True,
+            "report_family": "deep_research_report", "title": "测试", "target_reader": "管理层",
+            "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "判断", "purpose": "综合事实形成决策判断", "required_claim_ids": ["C1", "C2"], "word_budget": 120}],
+        }
+        claims = [
+            {"claim_id": "C1", "claim_type": "fact", "text": "收入增长。", "source_ids": ["OFF001"], "audit_status": "passed"},
+            {"claim_id": "C2", "claim_type": "judgment", "text": "应优先投入。", "source_ids": ["OFF001"], "audit_status": "passed", "reasoning_basis": "增长支持投入"},
+        ]
+        report = generator.generate_from_approved_outline(outline, claims, [{"source_id": "OFF001", "title": "公告", "url": "https://example.com"}], "主题", "是否投入")
+        section = report["sections"][0]
+        self.assertEqual(section["claim_ids"], ["C1", "C2"])
+        self.assertIn("事实：", section["content"])
+        self.assertIn("判断：", section["content"])
+        self.assertIn("综合事实形成决策判断", section["content"])
+        self.assertLessEqual(section["actual_word_count"], 180)
+
+    def test_evidence_synthesis_blocks_missing_required_claim(self):
+        from report_generator import ReportGenerator
+        generator = ReportGenerator()
+        outline = {"selected_outline_id": "a", "approved_by_user": True, "report_family": "x", "title": "x", "target_reader": "x", "writing_logic": "x", "sections": [{"section_id": "S1", "heading": "x", "purpose": "x", "required_claim_ids": ["MISSING"], "word_budget": 100}]}
+        with self.assertRaisesRegex(ValueError, "MISSING"):
+            generator.generate_from_approved_outline(outline, [], [], "x", "x")
+
+
 if __name__ == "__main__":
     unittest.main()
