@@ -4,7 +4,6 @@
 
 from copy import deepcopy
 from datetime import datetime
-from difflib import SequenceMatcher
 import hashlib
 import re
 from typing import Any, Callable, Dict, List, Optional
@@ -527,8 +526,7 @@ class WorkflowOrchestrator:
             before_core = self._style_normalized_sentence(before_sentence)
             after_core = self._style_normalized_sentence(after_sentence)
             anchors_match = self._sentence_anchors(before_sentence) == self._sentence_anchors(after_sentence)
-            similarity = SequenceMatcher(None, before_core, after_core).ratio()
-            approved = anchors_match and (before_core == after_core or similarity >= 0.72)
+            approved = anchors_match and before_core == after_core
             mappings.append({"before": before_sentence, "after": after_sentence, "approved": approved})
             if not approved:
                 unapproved.append(after_sentence)

@@ -250,8 +250,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         from workflow_orchestrator import WorkflowOrchestrator
 
         def test_humanizer(draft):
-            marker = "**写作逻辑**："
-            return {"markdown": draft["markdown"].replace(marker, "**行文逻辑**：", 1), "change_log": {"changed_sections": ["metadata"], "style_only": True, "unchanged_fact_confirmation": True}}
+            return {"markdown": draft["markdown"], "change_log": {"changed_sections": [], "style_only": True, "unchanged_fact_confirmation": True}}
 
         orchestrator = WorkflowOrchestrator(humanizer_adapter=test_humanizer)
         state = orchestrator.start_gate_workflow(
@@ -620,6 +619,17 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         self.assertEqual(integrity["status"], "passed")
         self.assertEqual(integrity["new_unapproved_sentences"], [])
+
+    def test_integrity_blocks_added_words_within_an_existing_sentence(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户，并形成壁垒。\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "failed")
+        self.assertEqual(integrity["new_unapproved_sentences"], ["现有渠道覆盖核心用户，并形成壁垒。"])
 
     def test_integrity_blocks_polarity_flip_and_deleted_outline_section(self):
         from workflow_orchestrator import WorkflowOrchestrator
