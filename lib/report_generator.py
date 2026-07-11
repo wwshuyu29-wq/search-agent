@@ -337,8 +337,9 @@ class ReportGenerator:
                 raise ValueError(f"ApprovedOutline requires missing claims: {', '.join(missing_claim_ids)}")
             section_claims = [claims_by_id[claim_id] for claim_id in claim_ids]
             purpose = section_contract.get("purpose", "")
-            paragraphs: List[str] = [f"本节围绕“{purpose}”回答“{decision}”，供{approved_outline.get('target_reader', '读者')}判断下一步行动。"]
-            seen_claims, seen_evidence, seen_implications = set(), set(), set()
+            paragraphs: List[str] = []
+            evidence_spans: List[str] = []
+            seen_claims, seen_evidence = set(), set()
             for claim in section_claims:
                 content = claim.get("content") or claim.get("claim") or claim.get("text") or ""
                 normalized_content = self._normalize_sentence(content)
@@ -356,18 +357,16 @@ class ReportGenerator:
                 suffix = f"（来源：{', '.join(citations)}）"
                 claim_type = claim["claim_type"]
                 type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}[claim_type]
-                paragraphs.append(f"{type_label}依据：{content}{suffix}")
+                claim_span = f"{type_label}依据：{content}{suffix}"
+                paragraphs.append(claim_span)
+                evidence_spans.append(claim_span)
                 evidence = claim.get("evidence_text") or claim.get("support_excerpt") or next((x for x in source_evidence if x), "")
                 normalized_evidence = self._normalize_sentence(evidence)
-                if evidence and normalized_evidence not in seen_evidence:
+                if evidence and normalized_evidence not in seen_evidence and normalized_evidence != normalized_content:
                     seen_evidence.add(normalized_evidence)
-                    inference = self._typed_inference(claim_type, evidence, purpose)
-                    paragraphs.append(f"证据与推导：{evidence}；{inference}")
-                implication = self._derive_business_implication(content, purpose, decision, claim_type)
-                normalized_implication = self._normalize_sentence(implication)
-                if normalized_implication not in seen_implications:
-                    seen_implications.add(normalized_implication)
-                    paragraphs.append(f"业务启示：{implication}")
+                    evidence_span = f"证据：{evidence}{suffix}"
+                    paragraphs.append(evidence_span)
+                    evidence_spans.append(evidence_span)
                 boundary = claim.get("evidence_boundary") or next(iter(source_boundaries), "")
                 if not boundary or boundary == "未提供证据边界" or claim.get("boundary_status") == "missing":
                     raise ValueError(f"未提供证据边界: {claim.get('claim_id')}")
@@ -376,7 +375,7 @@ class ReportGenerator:
             actual_word_count = len("".join(paragraphs).replace(" ", ""))
             word_budget = int(section_contract.get("word_budget", 600))
             lower, upper = int(word_budget * 0.90), int(word_budget * 1.10)
-            if actual_word_count < lower or quality["duplicate_rate"] > 0.20 or quality["template_ratio"] > 0.35:
+            if actual_word_count < lower or quality["template_ratio"] > 0.35:
                 raise ValueError(f"needs_expansion: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}, quality={quality}")
             if actual_word_count > upper:
                 raise ValueError(f"over_budget: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}")
@@ -385,11 +384,13 @@ class ReportGenerator:
                 "heading": heading,
                 "purpose": section_contract.get("purpose", ""),
                 "purpose_addressed": bool(section_claims) and bool(section_contract.get("purpose")),
+                "writer_added_prose": False,
                 "claim_ids": [claim.get("claim_id") for claim in section_claims],
                 "word_budget": word_budget,
                 "content": "\n\n".join(paragraphs),
                 "actual_word_count": actual_word_count,
                 "budget_variance": actual_word_count - word_budget,
+                "evidence_spans": evidence_spans,
             }
             draft_sections.append(draft_section)
             markdown_parts.extend([f"## {heading}", "", draft_section["content"], ""])

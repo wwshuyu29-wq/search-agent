@@ -196,6 +196,21 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("OutlinePlan", saved["artifacts"])
         self.assertNotIn("ReportDraft", saved["artifacts"])
 
+    def test_cli_custom_outline_requires_explicit_approval_flag(self):
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            sections_file = Path(temp_dir) / "sections.json"
+            state = agent.start_gate_workflow("测试", str(state_file))
+            state = __import__("workflow_orchestrator").WorkflowOrchestrator().resume_gate_workflow(state, "确认")
+            state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+            claim_id = state["artifacts"]["ApprovedClaimGraph"]["approved_claim_ids"][0]
+            sections_file.write_text(json.dumps([{"section_id": "S1", "heading": "自定义", "purpose": "判断", "required_claim_ids": [claim_id], "word_budget": 100}], ensure_ascii=False), encoding="utf-8")
+
+            waiting = agent.resume_gate_workflow("A", str(state_file), sections_file=str(sections_file), approve_outline=False)
+            self.assertEqual(waiting["pending_gate"], "outline_approved_by_user")
+            self.assertNotIn("ApprovedOutline", waiting["artifacts"])
+
     def test_cli_can_print_node_packets_from_saved_state(self):
         agent = SearchAgentSkill()
 

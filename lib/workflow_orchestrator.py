@@ -457,7 +457,7 @@ class WorkflowOrchestrator:
         }
         return raw_source_list, merger_log
 
-    def build_integrity_diff(self, report_draft: Dict[str, Any], final_report: Dict[str, Any], humanizer_change_log: Dict[str, Any] = None) -> Dict[str, Any]:
+    def build_integrity_diff(self, report_draft: Dict[str, Any], final_report: Dict[str, Any], humanizer_change_log: Dict[str, Any] = None, approved_outline: Dict[str, Any] = None) -> Dict[str, Any]:
         """Detect evidence-bearing changes between ReportDraft and FinalReport."""
         before = report_draft.get("markdown", "")
         after = final_report.get("markdown", "")
@@ -470,13 +470,22 @@ class WorkflowOrchestrator:
         risk_boundary_changes = self._changed_tokens(before, after, risk_pattern)
         before_sentences = set(self._sentences(before))
         new_factual_sentences = [sentence for sentence in self._sentences(after) if sentence not in before_sentences and self._looks_factual(sentence)]
+        before_headings = re.findall(r"^## (.+)$", before, re.M)
+        after_headings = re.findall(r"^## (.+)$", after, re.M)
+        expected_headings = [section.get("heading") for section in (approved_outline or {}).get("sections", [])]
+        structure_changes = [] if before_headings == after_headings and (not expected_headings or after_headings[:len(expected_headings)] == expected_headings) else [{"before": before_headings, "after": after_headings, "expected": expected_headings}]
+        deleted_evidence_spans = [span for section in report_draft.get("sections", []) for span in section.get("evidence_spans", []) if span not in after]
+        polarity_terms = r"不应|应|不建议|建议|禁止|允许|优先|暂缓|必须|无需|需要"
+        changed_polarity = self._changed_tokens(before, after, polarity_terms)
+        caveat_pattern = r"[^。.!?]*(?:假设|前提|边界|仅限|除非|assumption|caveat)[^。.!?]*[。.!?]?"
+        assumption_caveat_changes = self._changed_tokens(before, after, caveat_pattern)
         log = humanizer_change_log or {}
         log_violations = []
         if humanizer_change_log is not None and log.get("style_only") is not True:
             log_violations.append("style_only must be true")
         if humanizer_change_log is not None and log.get("unchanged_fact_confirmation") is not True:
             log_violations.append("unchanged_fact_confirmation must be true")
-        failures = changed_numbers or changed_dates or changed_source_ids or changed_claim_ids or changed_confidence or risk_boundary_changes or new_factual_sentences or log_violations
+        failures = changed_numbers or changed_dates or changed_source_ids or changed_claim_ids or changed_confidence or risk_boundary_changes or new_factual_sentences or structure_changes or deleted_evidence_spans or changed_polarity or assumption_caveat_changes or log_violations
         return {
             "status": "failed" if failures else "passed",
             "changed_numbers": changed_numbers,
@@ -486,6 +495,10 @@ class WorkflowOrchestrator:
             "changed_confidence": changed_confidence,
             "risk_boundary_changes": risk_boundary_changes,
             "new_factual_sentences": new_factual_sentences,
+            "structure_changes": structure_changes,
+            "deleted_evidence_spans": deleted_evidence_spans,
+            "changed_polarity": changed_polarity,
+            "assumption_caveat_changes": assumption_caveat_changes,
             "humanizer_log_violations": log_violations,
         }
 
@@ -640,15 +653,21 @@ class WorkflowOrchestrator:
                     elif not self._text_has_source_support(claim["reasoning_basis"], sources):
                         reason = "judgment reasoning_basis is not linked to source evidence"
                 elif claim_type == "assumption":
-                    support = claim.get("reasoning_basis") or claim.get("evidence_text") or claim.get("support_excerpt")
+                    support = claim.get("reasoning_basis")
+                    premise_ids = claim.get("premise_claim_ids") or []
+                    passed_by_id = {row.get("claim_id"): row for row in approved}
                     if not claim.get("evidence_boundary"):
                         reason = "assumption requires explicit evidence_boundary"
-                    elif not support:
-                        reason = "assumption requires reasoning_basis/evidence_text/support_excerpt"
+                    elif claim.get("confidence") != "low":
+                        reason = "assumption must remain low confidence"
+                    elif not support or not claim.get("inference_rule"):
+                        reason = "assumption requires reasoning_basis and explicit inference_rule"
+                    elif not premise_ids or any(pid not in passed_by_id for pid in premise_ids):
+                        reason = "assumption premises must exist and already be passed"
                     elif claim.get("verification_status") in {"pending", "unverified", "待验证"} or claim.get("pending_validation") is True:
                         reason = "pending assumption cannot enter writer"
-                    elif not self._text_has_source_support(support, sources):
-                        reason = "assumption support is not linked to source key_facts"
+                    elif not self._assumption_terms_relate(claim, [passed_by_id[pid] for pid in premise_ids]):
+                        reason = "assumption text is not related to its passed premises and reasoning_basis"
             if reason:
                 blocked.append(claim.get("claim_id")); issues.append({"claim_id": claim.get("claim_id"), "reason": reason})
             else:
@@ -674,6 +693,18 @@ class WorkflowOrchestrator:
             if negative in text and any(positive in item and negative not in item for item in normalized):
                 return False
         return bool(text) and any(text in item or item in text for item in normalized if item)
+
+    def _assumption_terms_relate(self, claim: Dict[str, Any], premises: List[Dict[str, Any]]) -> bool:
+        def tokenize(value):
+            text = str(value).lower()
+            terms = set(re.findall(r"[a-z0-9]+", text))
+            for run in re.findall(r"[\u4e00-\u9fff]+", text):
+                terms.update(run[index:index + 2] for index in range(max(0, len(run) - 1)))
+            return terms
+        claim_terms = tokenize(claim.get("text"))
+        basis_terms = tokenize(claim.get("reasoning_basis"))
+        premise_terms = set().union(*(tokenize(row.get("text")) for row in premises))
+        return bool(claim_terms & basis_terms) and bool(claim_terms & premise_terms)
 
     def _claim_has_textual_support(self, claim: Dict[str, Any], sources: List[Dict[str, Any]]) -> bool:
         claim_text = self._normalize_evidence_text(claim.get("text", ""))
@@ -881,14 +912,31 @@ class WorkflowOrchestrator:
             return self._workflow_state("blocked", "step3_humanizer", "humanizer_invalid", artifacts, validations, phase_results, "Humanizer 必须返回改写 markdown 和 change_log。")
         report_draft = artifacts["ReportDraft"]
         final_report = {"markdown": markdown, "report_family": report_draft["report_family"], "source_count": len(report_draft["references"]), "generated_at": self._timestamp(), "humanizer_notes": change_log.get("changed_sections", [])}
+        humanized_sections = self._sections_from_markdown(markdown, report_draft.get("sections", []))
+        final_report["sections"] = humanized_sections
+        post_humanizer_compliance = review_outline_compliance(artifacts["ApprovedOutline"], final_report)
+        artifacts["PostHumanizerOutlineComplianceReview"] = post_humanizer_compliance
         artifacts.update({"FinalReport": final_report, "HumanizerChangeLog": change_log})
         phase_results.append(self._phase_result("step3_humanizer", ["FinalReport", "HumanizerChangeLog"]))
-        integrity = self.build_integrity_diff(report_draft, final_report, change_log)
+        integrity = self.build_integrity_diff(report_draft, final_report, change_log, artifacts["ApprovedOutline"])
         artifacts["IntegrityDiff"] = integrity
         validations.extend(self._validate_many({"FinalReport": final_report, "HumanizerChangeLog": change_log, "IntegrityDiff": integrity}))
         phase_results.append(self._phase_result("step3_integrity_check", ["IntegrityDiff"]))
-        valid = all(v["valid"] for v in validations) and integrity["status"] == "passed"
+        valid = all(v["valid"] for v in validations) and post_humanizer_compliance["status"] == "passed" and integrity["status"] == "passed"
         return self._workflow_state("waiting_for_user" if valid else "blocked", "step3_integrity_check", "final_report_review" if valid else "integrity_failed", artifacts, validations, phase_results, "请审核 FinalReport；回复通过完成，或提出具体修订意见。")
+
+    def _sections_from_markdown(self, markdown: str, draft_sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        chunks = re.split(r"^## (.+)$", markdown, flags=re.M)
+        content_by_heading = {chunks[index].strip(): chunks[index + 1].strip() for index in range(1, len(chunks) - 1, 2)}
+        sections = []
+        for draft in draft_sections:
+            content = content_by_heading.get(draft.get("heading"), "")
+            row = deepcopy(draft)
+            row["content"] = content
+            row["actual_word_count"] = len(content.replace(" ", ""))
+            row["budget_variance"] = row["actual_word_count"] - int(row.get("word_budget", 0))
+            sections.append(row)
+        return sections
 
     def continue_from_source_fragments(self, state: Dict[str, Any], user_decision: str = "source fragments ready") -> Dict[str, Any]:
         """Continue a workflow using already-executed real SourceListFragment artifacts."""

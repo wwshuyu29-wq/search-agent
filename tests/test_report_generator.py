@@ -35,14 +35,14 @@ class ReportGeneratorTest(unittest.TestCase):
                     "heading": "现象与关键问题",
                     "purpose": "定义变化",
                     "required_claim_ids": ["C001"],
-                    "word_budget": 190,
+                    "word_budget": 70,
                 },
                 {
                     "section_id": "S2",
                     "heading": "战略含义与优先议题",
                     "purpose": "形成建议",
                     "required_claim_ids": ["C002"],
-                    "word_budget": 170,
+                    "word_budget": 65,
                 },
             ],
         }
@@ -81,9 +81,9 @@ class ReportGeneratorTest(unittest.TestCase):
         def outline(budget):
             return {"selected_outline_id": "A", "approved_by_user": True, "title": "报告", "target_reader": "业务团队", "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "结论", "purpose": "判断是否投入", "required_claim_ids": ["C1"], "word_budget": budget}]}
 
-        report = generator.generate_from_approved_outline(outline(180), [claim], [source], "主题", "是否投入")
-        self.assertGreaterEqual(report["sections"][0]["actual_word_count"], 162)
-        self.assertLessEqual(report["sections"][0]["actual_word_count"], 198)
+        report = generator.generate_from_approved_outline(outline(53), [claim], [source], "主题", "是否投入")
+        self.assertGreaterEqual(report["sections"][0]["actual_word_count"], 47)
+        self.assertLessEqual(report["sections"][0]["actual_word_count"], 58)
         with self.assertRaisesRegex(ValueError, "needs_expansion"):
             generator.generate_from_approved_outline(outline(600), [claim], [source], "主题", "是否投入")
         with self.assertRaisesRegex(ValueError, "over_budget"):
@@ -322,7 +322,7 @@ class ReportGeneratorTest(unittest.TestCase):
         outline = {
             "selected_outline_id": "outline_a", "approved_by_user": True,
             "report_family": "deep_research_report", "title": "测试", "target_reader": "管理层",
-            "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "判断", "purpose": "综合事实形成决策判断", "required_claim_ids": ["C1", "C2"], "word_budget": 260}],
+            "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "判断", "purpose": "综合事实形成决策判断", "required_claim_ids": ["C1", "C2"], "word_budget": 113}],
         }
         claims = [
             {"claim_id": "C1", "claim_type": "fact", "text": "收入增长。", "source_ids": ["OFF001"], "audit_status": "passed", "evidence_boundary": "仅覆盖本期公告"},
@@ -333,9 +333,22 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertEqual(section["claim_ids"], ["C1", "C2"])
         self.assertIn("事实依据：", section["content"])
         self.assertIn("判断依据：", section["content"])
-        self.assertIn("综合事实形成决策判断", section["content"])
-        self.assertGreaterEqual(section["actual_word_count"], 234)
-        self.assertLessEqual(section["actual_word_count"], 286)
+        self.assertNotIn("综合事实形成决策判断", section["content"])
+        self.assertGreaterEqual(section["actual_word_count"], 101)
+        self.assertLessEqual(section["actual_word_count"], 124)
+
+    def test_writer_emits_only_audited_claim_and_evidence_sentences(self):
+        from report_generator import ReportGenerator
+
+        outline = {"selected_outline_id": "a", "approved_by_user": True, "title": "报告", "target_reader": "团队", "writing_logic": "证据", "sections": [{"section_id": "S1", "heading": "结论", "purpose": "判断", "required_claim_ids": ["J1"], "word_budget": 52}]}
+        claim = {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入。", "source_ids": ["S1"], "audit_status": "passed", "reasoning_basis": "收入增长。", "evidence_boundary": "仅覆盖本期。"}
+        report = ReportGenerator().generate_from_approved_outline(outline, [claim], [{"source_id": "S1", "url": "https://example.com"}], "主题", "是否投入")
+        content = report["sections"][0]["content"]
+        self.assertIn("应优先投入", content)
+        self.assertNotIn("核对现状并设置跟踪指标", content)
+        self.assertNotIn("业务启示", content)
+        self.assertEqual(report["sections"][0]["claim_ids"], ["J1"])
+        self.assertTrue(report["sections"][0]["evidence_spans"])
 
     def test_evidence_synthesis_blocks_missing_required_claim(self):
         from report_generator import ReportGenerator

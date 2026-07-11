@@ -420,7 +420,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         state["artifacts"]["OutlinePlan"] = __import__("workflow_contracts").build_outline_candidates(
             state["artifacts"]["IntentBrief"], ["CL001"]
         )
-        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 140}]
+        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 53}]
 
         completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override, "approved_by_user": True})
 
@@ -535,15 +535,15 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             {"claim_id": "F1", "claim_type": "fact", "text": "收入为120亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元"},
             {"claim_id": "C1", "claim_type": "calculation", "text": "利润为20亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元，成本为100亿元，因此利润为20亿元", "calculation_inputs": {"revenue": 120, "cost": 100}, "formula": "revenue - cost"},
             {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入"},
-            {"claim_id": "A1", "claim_type": "assumption", "text": "需求将延续", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入", "evidence_boundary": "仅在用户需求继续增长时成立"},
+            {"claim_id": "A1", "claim_type": "assumption", "text": "用户需求增长将延续", "source_ids": ["OFF001"], "reasoning_basis": "由用户需求增长外推增长延续", "premise_claim_ids": ["J1"], "inference_rule": "趋势外推", "evidence_boundary": "仅在用户需求继续增长时成立", "confidence": "low"},
             {"claim_id": "A2", "claim_type": "assumption", "text": "无来源假设", "source_ids": [], "evidence_boundary": "仅为情景，不进入批准图"},
         ]
 
         audit, approved = WorkflowOrchestrator().audit_claim_graph({"claims": claims}, clean)
 
-        self.assertEqual(audit["approved_claim_ids"], ["F1", "C1", "J1", "A1"])
-        self.assertEqual(audit["blocked_claim_ids"], ["A2"])
-        self.assertEqual([claim["claim_id"] for claim in approved["claims"]], ["F1", "C1", "J1", "A1"])
+        self.assertEqual(audit["approved_claim_ids"], ["F1", "C1", "J1"])
+        self.assertEqual(audit["blocked_claim_ids"], ["A1", "A2"])
+        self.assertEqual([claim["claim_id"] for claim in approved["claims"]], ["F1", "C1", "J1"])
 
     def test_citation_audit_blocks_invalid_metadata_unknown_type_and_opposite_content(self):
         from workflow_orchestrator import WorkflowOrchestrator
@@ -568,11 +568,11 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         clean = {"sources": [{"source_id": "S1", "key_facts": ["收入增长支持扩产"]}], "approved_source_ids": ["S1"]}
         claims = {"claims": [
             {"claim_id": "A1", "claim_type": "assumption", "text": "天气持续晴朗", "source_ids": ["S1"], "reasoning_basis": "天气持续晴朗", "evidence_boundary": "待验证", "verification_status": "pending"},
-            {"claim_id": "A2", "claim_type": "assumption", "text": "收入增长将持续", "source_ids": ["S1"], "reasoning_basis": "收入增长支持扩产", "evidence_boundary": "仅限当前趋势"},
+            {"claim_id": "A2", "claim_type": "assumption", "text": "收入增长将持续", "source_ids": ["S1"], "reasoning_basis": "收入增长支持趋势外推", "premise_claim_ids": ["F1"], "inference_rule": "趋势外推", "evidence_boundary": "仅限当前趋势", "confidence": "low"},
         ]}
         audit, approved = WorkflowOrchestrator().audit_claim_graph(claims, clean)
-        self.assertEqual(audit["blocked_claim_ids"], ["A1"])
-        self.assertEqual(approved["approved_claim_ids"], ["A2"])
+        self.assertEqual(audit["blocked_claim_ids"], ["A1", "A2"])
+        self.assertEqual(approved["approved_claim_ids"], [])
 
     def test_formal_workflow_requires_humanizer_before_final_report(self):
         from workflow_orchestrator import WorkflowOrchestrator
@@ -598,6 +598,38 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         tampered = orchestrator.resume_gate_workflow(state, {"humanized_markdown": draft.replace("2026", "2099", 1), "change_log": {"changed_sections": ["第一节"], "style_only": True, "unchanged_fact_confirmation": True}})
         self.assertEqual(tampered["status"], "blocked")
         self.assertEqual(tampered["artifacts"]["IntegrityDiff"]["status"], "failed")
+
+    def test_integrity_blocks_polarity_flip_and_deleted_outline_section(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {
+            "markdown": "# 报告\n\n## 结论\n\n判断依据：应优先投入。\n\n## 风险\n\n事实依据：样本有限。\n",
+            "sections": [
+                {"section_id": "S1", "heading": "结论", "claim_ids": ["J1"], "content": "判断依据：应优先投入。", "evidence_spans": ["判断依据：应优先投入。"]},
+                {"section_id": "S2", "heading": "风险", "claim_ids": ["F1"], "content": "事实依据：样本有限。", "evidence_spans": ["事实依据：样本有限。"]},
+            ],
+        }
+        outline = {"sections": [{"section_id": "S1", "heading": "结论"}, {"section_id": "S2", "heading": "风险"}]}
+        orchestrator = WorkflowOrchestrator()
+        flipped = {"markdown": "# 报告\n\n## 结论\n\n判断依据：不应优先投入。\n\n## 风险\n\n事实依据：样本有限。\n"}
+        deleted = {"markdown": "# 报告\n\n## 结论\n\n判断依据：应优先投入。\n"}
+
+        self.assertEqual(orchestrator.build_integrity_diff(draft, flipped, approved_outline=outline)["status"], "failed")
+        self.assertEqual(orchestrator.build_integrity_diff(draft, deleted, approved_outline=outline)["status"], "failed")
+
+    def test_assumption_requires_passed_premises_rule_and_textual_relation(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        clean = {"sources": [{"source_id": "S1", "key_facts": ["收入增长"]}], "approved_source_ids": ["S1"]}
+        claims = {"claims": [
+            {"claim_id": "F1", "claim_type": "fact", "text": "收入增长", "source_ids": ["S1"], "evidence_text": "收入增长"},
+            {"claim_id": "A1", "claim_type": "assumption", "text": "收入增长将持续", "source_ids": ["S1"], "reasoning_basis": "由收入增长外推增长持续", "premise_claim_ids": ["F1"], "inference_rule": "趋势外推", "evidence_boundary": "仅为假设", "confidence": "low"},
+            {"claim_id": "A2", "claim_type": "assumption", "text": "天气持续晴朗", "source_ids": ["S1"], "reasoning_basis": "由收入增长外推天气", "premise_claim_ids": ["F1"], "inference_rule": "趋势外推", "evidence_boundary": "仅为假设", "confidence": "low"},
+        ]}
+        audit, approved = WorkflowOrchestrator().audit_claim_graph(claims, clean)
+        self.assertIn("A1", audit["approved_claim_ids"])
+        self.assertIn("A2", audit["blocked_claim_ids"])
+        self.assertEqual(next(c for c in approved["claims"] if c["claim_id"] == "A1")["claim_type"], "assumption")
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator

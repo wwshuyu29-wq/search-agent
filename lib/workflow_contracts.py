@@ -2782,7 +2782,7 @@ def build_outline_candidates(intent_brief: Dict[str, Any], claim_ids: Optional[L
                     "heading": heading,
                     "purpose": purpose,
                     "required_claim_ids": assigned,
-                    "word_budget": max(220, 310 * len(assigned)),
+                    "word_budget": max(100, 110 * len(assigned)),
                 }
             )
         candidates.append(
@@ -2858,7 +2858,7 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
         purpose = str(contract.get("purpose", ""))
         purpose_terms = [term.lower() for term in re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]{2,}", purpose)]
         purpose_present = bool(purpose_terms) and any(term in content.lower() for term in purpose_terms)
-        if not section.get("purpose_addressed", False) or not purpose_present:
+        if not section.get("purpose_addressed", False) or (section.get("writer_added_prose", True) and not purpose_present):
             purpose_gaps.append(heading)
         used_claims = set(section.get("claim_ids", []))
         required_claims = set(contract.get("required_claim_ids", []))

@@ -378,7 +378,7 @@ class SearchAgentSkill:
         print(f"\n下一步: {state['next_action']}")
         return state
 
-    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json", sections_file: str = "", humanized_file: str = "", change_log_file: str = "") -> Dict:
+    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json", sections_file: str = "", humanized_file: str = "", change_log_file: str = "", approve_outline: bool = False) -> Dict:
         """Resume persisted state, including explicit Humanizer output submission."""
         orchestrator = WorkflowOrchestrator()
         previous_state = self._read_workflow_state(state_file)
@@ -388,6 +388,7 @@ class SearchAgentSkill:
             if sections_file:
                 with open(sections_file, "r", encoding="utf-8") as handle:
                     decision["sections_override"] = json.load(handle)
+                decision["approved_by_user"] = approve_outline
         elif previous_state.get("pending_gate") == "humanizer_required":
             if not humanized_file or not change_log_file:
                 raise ValueError("humanizer_required 需要 --humanized-file 和 --change-log-file")
@@ -826,6 +827,7 @@ def main():
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
     parser.add_argument("--workflow-resume", type=str, help="根据确认、A/B/C 或修订意见恢复工作流")
     parser.add_argument("--sections-file", type=str, default="", help="包含 sections_override 数组的 JSON 文件")
+    parser.add_argument("--approve-outline", action="store_true", help="明确批准 --sections-file 提供的自定义大纲")
     parser.add_argument("--humanized-file", type=str, default="", help="真实 Humanizer 改写后的 Markdown 文件")
     parser.add_argument("--change-log-file", type=str, default="", help="HumanizerChangeLog JSON 文件")
     parser.add_argument("--workflow-packets", type=str, help="输出某个 phase 的可派发子 agent packet")
@@ -873,7 +875,7 @@ def main():
         return
 
     if args.workflow_resume:
-        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file, sections_file=args.sections_file, humanized_file=args.humanized_file, change_log_file=args.change_log_file)
+        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file, sections_file=args.sections_file, humanized_file=args.humanized_file, change_log_file=args.change_log_file, approve_outline=args.approve_outline)
         return
 
     if args.workflow_packets:
