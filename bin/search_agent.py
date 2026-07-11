@@ -378,8 +378,8 @@ class SearchAgentSkill:
         print(f"\n下一步: {state['next_action']}")
         return state
 
-    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json", sections_file: str = "") -> Dict:
-        """Resume persisted state; optional JSON supplies structured outline overrides."""
+    def resume_gate_workflow(self, user_decision: str, state_file: str = "search_agent_state.json", sections_file: str = "", humanized_file: str = "", change_log_file: str = "") -> Dict:
+        """Resume persisted state, including explicit Humanizer output submission."""
         orchestrator = WorkflowOrchestrator()
         previous_state = self._read_workflow_state(state_file)
         decision = user_decision
@@ -388,6 +388,14 @@ class SearchAgentSkill:
             if sections_file:
                 with open(sections_file, "r", encoding="utf-8") as handle:
                     decision["sections_override"] = json.load(handle)
+        elif previous_state.get("pending_gate") == "humanizer_required":
+            if not humanized_file or not change_log_file:
+                raise ValueError("humanizer_required 需要 --humanized-file 和 --change-log-file")
+            with open(humanized_file, "r", encoding="utf-8") as handle:
+                humanized_markdown = handle.read()
+            with open(change_log_file, "r", encoding="utf-8") as handle:
+                change_log = json.load(handle)
+            decision = {"humanized_markdown": humanized_markdown, "change_log": change_log}
         state = orchestrator.resume_gate_workflow(previous_state, decision)
         self._write_workflow_state(state, state_file)
 
@@ -818,6 +826,8 @@ def main():
     parser.add_argument("--workflow-start", action="store_true", help="启动正式 gate-driven workflow，输出审核卡后暂停")
     parser.add_argument("--workflow-resume", type=str, help="根据确认、A/B/C 或修订意见恢复工作流")
     parser.add_argument("--sections-file", type=str, default="", help="包含 sections_override 数组的 JSON 文件")
+    parser.add_argument("--humanized-file", type=str, default="", help="真实 Humanizer 改写后的 Markdown 文件")
+    parser.add_argument("--change-log-file", type=str, default="", help="HumanizerChangeLog JSON 文件")
     parser.add_argument("--workflow-packets", type=str, help="输出某个 phase 的可派发子 agent packet")
     parser.add_argument("--execute-source-hunter", type=str, help="执行指定 Source Hunter 节点并写回 SourceListFragment")
     parser.add_argument("--execute-source-hunters", action="store_true", help="执行全部 Source Hunter 节点并写回 SourceListFragment")
@@ -863,7 +873,7 @@ def main():
         return
 
     if args.workflow_resume:
-        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file, sections_file=args.sections_file)
+        agent.resume_gate_workflow(args.workflow_resume, state_file=args.state_file, sections_file=args.sections_file, humanized_file=args.humanized_file, change_log_file=args.change_log_file)
         return
 
     if args.workflow_packets:

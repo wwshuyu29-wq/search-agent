@@ -6,7 +6,7 @@ from copy import deepcopy
 from datetime import datetime
 import hashlib
 import re
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from workflow_contracts import (
@@ -24,7 +24,8 @@ from workflow_contracts import (
 class WorkflowOrchestrator:
     """Validate handoff artifacts and route workflow phases."""
 
-    def __init__(self):
+    def __init__(self, humanizer_adapter: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None):
+        self.humanizer_adapter = humanizer_adapter
         self.artifact_contracts = get_artifact_contracts()
         self.node_contracts = get_node_contracts()
         self.orchestration_plan = get_orchestration_plan()
@@ -291,6 +292,18 @@ class WorkflowOrchestrator:
                 waiting["updated_at"] = self._timestamp()
                 return waiting
             return self._run_after_outline_approval(state, decision)
+
+        if pending_gate == "humanizer_required":
+            if not isinstance(user_decision, dict):
+                raise ValueError("humanizer_required expects humanized_markdown and change_log")
+            payload = {"markdown": user_decision.get("humanized_markdown"), "change_log": user_decision.get("change_log")}
+            return self._complete_humanizer(
+                state,
+                deepcopy(state["artifacts"]),
+                deepcopy(state.get("validations", [])),
+                deepcopy(state.get("phase_results", [])),
+                payload,
+            )
 
         if pending_gate == "final_report_review":
             reviewed = deepcopy(state)
@@ -588,7 +601,8 @@ class WorkflowOrchestrator:
             for fact in source.get("key_facts", []):
                 if fact:
                     normalized = self._normalize_evidence_text(fact)
-                    claims.append({"claim_id": f"CL{len(claims)+1:03d}", "dimension": source.get("source_type", "evidence"), "claim_type": "fact", "text": fact, "source_ids": [source["source_id"]], "confidence": source.get("confidence", "medium"), "reasoning_basis": "verbatim source key fact", "evidence_text": fact, "evidence_hash": hashlib.sha256(normalized.encode("utf-8")).hexdigest()})
+                    boundary = source.get("evidence_boundary") or source.get("coverage_scope") or source.get("limitations")
+                    claims.append({"claim_id": f"CL{len(claims)+1:03d}", "dimension": source.get("source_type", "evidence"), "claim_type": "fact", "text": fact, "source_ids": [source["source_id"]], "confidence": source.get("confidence", "medium"), "reasoning_basis": "verbatim source key fact", "evidence_text": fact, "evidence_boundary": boundary or "未提供证据边界", "boundary_status": "provided" if boundary else "missing", "evidence_hash": hashlib.sha256(normalized.encode("utf-8")).hexdigest()})
         return {"claims": claims}
 
     def audit_claim_graph(self, claim_graph: Dict[str, Any], clean_source_list: Dict[str, Any]):
@@ -625,8 +639,16 @@ class WorkflowOrchestrator:
                         reason = "judgment requires reasoning_basis"
                     elif not self._text_has_source_support(claim["reasoning_basis"], sources):
                         reason = "judgment reasoning_basis is not linked to source evidence"
-                elif claim_type == "assumption" and not claim.get("evidence_boundary"):
-                    reason = "assumption requires explicit evidence_boundary"
+                elif claim_type == "assumption":
+                    support = claim.get("reasoning_basis") or claim.get("evidence_text") or claim.get("support_excerpt")
+                    if not claim.get("evidence_boundary"):
+                        reason = "assumption requires explicit evidence_boundary"
+                    elif not support:
+                        reason = "assumption requires reasoning_basis/evidence_text/support_excerpt"
+                    elif claim.get("verification_status") in {"pending", "unverified", "待验证"} or claim.get("pending_validation") is True:
+                        reason = "pending assumption cannot enter writer"
+                    elif not self._text_has_source_support(support, sources):
+                        reason = "assumption support is not linked to source key_facts"
             if reason:
                 blocked.append(claim.get("claim_id")); issues.append({"claim_id": claim.get("claim_id"), "reason": reason})
             else:
@@ -847,13 +869,21 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step3_outline_compliance", ["OutlineComplianceReview"]))
         if compliance["status"] != "passed":
             return self._workflow_state("blocked", "step3_outline_compliance", "outline_compliance_failed", artifacts, validations, phase_results, "Outline compliance failed.")
-        final_report = {"markdown": report_draft["markdown"], "report_family": report_draft["report_family"], "source_count": len(report_draft["references"]), "generated_at": self._timestamp(), "humanizer_notes": ["deterministic style-only pass"]}
-        change_log = {"changed_sections": [], "style_only": True, "unchanged_fact_confirmation": True}
+        if self.humanizer_adapter is None:
+            return self._workflow_state("waiting_for_user", "step3_humanizer", "humanizer_required", artifacts, validations, phase_results, "请运行真实 Humanizer Editor，并提交 humanized_markdown 与 change_log 后恢复。")
+        humanized = self.humanizer_adapter(deepcopy(report_draft))
+        return self._complete_humanizer(state, artifacts, validations, phase_results, humanized)
+
+    def _complete_humanizer(self, state, artifacts, validations, phase_results, humanized):
+        markdown = humanized.get("markdown") if isinstance(humanized, dict) else None
+        change_log = humanized.get("change_log") if isinstance(humanized, dict) else None
+        if not markdown or not isinstance(change_log, dict):
+            return self._workflow_state("blocked", "step3_humanizer", "humanizer_invalid", artifacts, validations, phase_results, "Humanizer 必须返回改写 markdown 和 change_log。")
+        report_draft = artifacts["ReportDraft"]
+        final_report = {"markdown": markdown, "report_family": report_draft["report_family"], "source_count": len(report_draft["references"]), "generated_at": self._timestamp(), "humanizer_notes": change_log.get("changed_sections", [])}
         artifacts.update({"FinalReport": final_report, "HumanizerChangeLog": change_log})
         phase_results.append(self._phase_result("step3_humanizer", ["FinalReport", "HumanizerChangeLog"]))
-        integrity = self.build_integrity_diff(report_draft, final_report)
-        if review_outline_compliance(approved_outline, {**report_draft, "markdown": final_report["markdown"]})["status"] != "passed":
-            integrity["status"] = "failed"
+        integrity = self.build_integrity_diff(report_draft, final_report, change_log)
         artifacts["IntegrityDiff"] = integrity
         validations.extend(self._validate_many({"FinalReport": final_report, "HumanizerChangeLog": change_log, "IntegrityDiff": integrity}))
         phase_results.append(self._phase_result("step3_integrity_check", ["IntegrityDiff"]))
@@ -1067,6 +1097,7 @@ class WorkflowOrchestrator:
                 "full_text_fetched": True,
                 "collected_by": collected_by,
                 "confidence_rationale": rationale,
+                "coverage_scope": "仅用于 dry-run 的 2026-07-08 示例记录",
             }
             for source_id, title, publisher, source_type, confidence, rationale, collected_by in source_specs
         ]

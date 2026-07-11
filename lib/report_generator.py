@@ -337,30 +337,47 @@ class ReportGenerator:
                 raise ValueError(f"ApprovedOutline requires missing claims: {', '.join(missing_claim_ids)}")
             section_claims = [claims_by_id[claim_id] for claim_id in claim_ids]
             purpose = section_contract.get("purpose", "")
-            paragraphs: List[str] = [f"本节围绕“{purpose}”回答“{decision}”，供{approved_outline.get('target_reader', '读者')}据此判断下一步行动。"]
+            paragraphs: List[str] = [f"本节围绕“{purpose}”回答“{decision}”，供{approved_outline.get('target_reader', '读者')}判断下一步行动。"]
+            seen_claims, seen_evidence, seen_implications = set(), set(), set()
             for claim in section_claims:
                 content = claim.get("content") or claim.get("claim") or claim.get("text") or ""
-                citations = []
-                evidence_meanings = []
+                normalized_content = self._normalize_sentence(content)
+                if not normalized_content or normalized_content in seen_claims:
+                    continue
+                seen_claims.add(normalized_content)
+                citations, source_evidence, source_boundaries = [], [], []
                 for source_id in claim.get("source_ids", []):
                     source = source_map.get(source_id, {})
                     url = source.get("url") or source.get("canonical_url") or ""
                     citations.append(f"[{source_id}]({url})" if url else source_id)
-                    evidence_meanings.extend(source.get("key_facts", []))
+                    source_evidence.extend(source.get("key_facts", []))
+                    source_evidence.extend(x for x in [source.get("evidence_text"), source.get("support_excerpt")] if x)
+                    source_boundaries.extend(x for x in [source.get("evidence_boundary"), source.get("coverage_scope"), source.get("limitations")] if x)
                 suffix = f"（来源：{', '.join(citations)}）"
-                type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}[claim["claim_type"]]
+                claim_type = claim["claim_type"]
+                type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}[claim_type]
                 paragraphs.append(f"{type_label}依据：{content}{suffix}")
-                evidence = claim.get("evidence_text") or claim.get("support_excerpt") or "；".join(evidence_meanings)
-                if evidence:
-                    paragraphs.append(f"证据含义：{evidence}。这说明该证据与“{purpose}”直接相关，而不是脱离决策问题的背景信息。")
-                paragraphs.append(f"业务启示：针对“{decision}”，应把上述结论转化为可验证动作，并以该证据所覆盖的对象和期间作为适用范围。")
-                boundary = claim.get("evidence_boundary") or "现有来源只支持所引述事实，不支持超出样本、期间或口径的外推"
-                paragraphs.append(f"证据边界：{boundary}。若边界条件改变，应补充来源并重新审核，不能沿用本节判断。")
+                evidence = claim.get("evidence_text") or claim.get("support_excerpt") or next((x for x in source_evidence if x), "")
+                normalized_evidence = self._normalize_sentence(evidence)
+                if evidence and normalized_evidence not in seen_evidence:
+                    seen_evidence.add(normalized_evidence)
+                    inference = self._typed_inference(claim_type, evidence, purpose)
+                    paragraphs.append(f"证据与推导：{evidence}；{inference}")
+                implication = self._derive_business_implication(content, purpose, decision, claim_type)
+                normalized_implication = self._normalize_sentence(implication)
+                if normalized_implication not in seen_implications:
+                    seen_implications.add(normalized_implication)
+                    paragraphs.append(f"业务启示：{implication}")
+                boundary = claim.get("evidence_boundary") or next(iter(source_boundaries), "")
+                if not boundary or boundary == "未提供证据边界" or claim.get("boundary_status") == "missing":
+                    raise ValueError(f"未提供证据边界: {claim.get('claim_id')}")
+                paragraphs.append(f"证据边界：{boundary}")
+            quality = self._content_quality(paragraphs)
             actual_word_count = len("".join(paragraphs).replace(" ", ""))
             word_budget = int(section_contract.get("word_budget", 600))
             lower, upper = int(word_budget * 0.90), int(word_budget * 1.10)
-            if actual_word_count < lower:
-                raise ValueError(f"needs_expansion: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}")
+            if actual_word_count < lower or quality["duplicate_rate"] > 0.20 or quality["template_ratio"] > 0.35:
+                raise ValueError(f"needs_expansion: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}, quality={quality}")
             if actual_word_count > upper:
                 raise ValueError(f"over_budget: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}")
             draft_section = {
@@ -406,6 +423,30 @@ class ReportGenerator:
             raise ValueError(f"正文偏离已确认大纲：{compliance}")
         report["outline_compliance"] = compliance
         return report
+
+    def _normalize_sentence(self, text: Any) -> str:
+        return "".join(character.lower() for character in str(text) if character.isalnum() or "\u4e00" <= character <= "\u9fff")
+
+    def _typed_inference(self, claim_type: str, evidence: str, purpose: str) -> str:
+        prefixes = {
+            "fact": "该事实界定了",
+            "calculation": "该计算量化了",
+            "assumption": "该假设仅用于检验",
+            "judgment": "该判断连接证据与",
+        }
+        return f"{prefixes[claim_type]}“{purpose}”中的关键条件"
+
+    def _derive_business_implication(self, claim_text: str, purpose: str, decision: str, claim_type: str) -> str:
+        actions = {"fact": "核对现状并设置跟踪指标", "calculation": "复算口径后比较方案", "assumption": "先验证前提再配置资源", "judgment": "用反面证据复核优先级"}
+        return f"围绕“{decision}”，依据“{claim_text}”{actions[claim_type]}，以完成“{purpose}”。"
+
+    def _content_quality(self, paragraphs: List[str]) -> Dict[str, float]:
+        normalized = [self._normalize_sentence(item) for item in paragraphs if self._normalize_sentence(item)]
+        duplicate_count = len(normalized) - len(set(normalized))
+        filler_phrases = ("这说明该证据与", "应把上述结论转化为可验证动作", "若边界条件改变，应补充来源")
+        template_chars = sum(len(phrase) * item.count(phrase) for item in paragraphs for phrase in filler_phrases)
+        total_chars = max(1, sum(len(item) for item in paragraphs))
+        return {"duplicate_rate": duplicate_count / max(1, len(normalized)), "template_ratio": template_chars / total_chars}
 
     def generate_report(
         self,

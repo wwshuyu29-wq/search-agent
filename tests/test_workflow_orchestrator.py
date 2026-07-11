@@ -249,7 +249,11 @@ class WorkflowOrchestratorTest(unittest.TestCase):
     def test_gate_driven_workflow_can_mark_final_report_complete(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
-        orchestrator = WorkflowOrchestrator()
+        def test_humanizer(draft):
+            marker = "**写作逻辑**："
+            return {"markdown": draft["markdown"].replace(marker, "**行文逻辑**：", 1), "change_log": {"changed_sections": ["metadata"], "style_only": True, "unchanged_fact_confirmation": True}}
+
+        orchestrator = WorkflowOrchestrator(humanizer_adapter=test_humanizer)
         state = orchestrator.start_gate_workflow(
             "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
         )
@@ -405,18 +409,18 @@ class WorkflowOrchestratorTest(unittest.TestCase):
     def test_outline_choice_and_override_are_required_before_final_pipeline(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
-        orchestrator = WorkflowOrchestrator()
+        orchestrator = WorkflowOrchestrator(humanizer_adapter=lambda draft: {"markdown": draft["markdown"].replace("供x判断下一步行动", "供x确定下一步安排"), "change_log": {"changed_sections": ["all"], "style_only": True, "unchanged_fact_confirmation": True}})
         state = orchestrator.start_gate_workflow("测试")
         state["pending_gate"] = "outline_approved_by_user"
         state["artifacts"]["ApprovedClaimGraph"] = {
             "approved_claim_ids": ["CL001"],
-            "claims": [{"claim_id": "CL001", "claim_type": "fact", "text": "事实", "source_ids": ["OFF001"], "audit_status": "passed"}],
+            "claims": [{"claim_id": "CL001", "claim_type": "fact", "text": "事实", "source_ids": ["OFF001"], "audit_status": "passed", "evidence_boundary": "仅覆盖测试来源"}],
         }
         state["artifacts"]["CleanSourceList"] = {"sources": [{"source_id": "OFF001", "title": "来源", "url": "https://example.com"}], "approved_source_ids": ["OFF001"], "excluded_source_ids": [], "source_quality_notes": []}
         state["artifacts"]["OutlinePlan"] = __import__("workflow_contracts").build_outline_candidates(
             state["artifacts"]["IntentBrief"], ["CL001"]
         )
-        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 190}]
+        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 140}]
 
         completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override, "approved_by_user": True})
 
@@ -531,7 +535,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             {"claim_id": "F1", "claim_type": "fact", "text": "收入为120亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元"},
             {"claim_id": "C1", "claim_type": "calculation", "text": "利润为20亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元，成本为100亿元，因此利润为20亿元", "calculation_inputs": {"revenue": 120, "cost": 100}, "formula": "revenue - cost"},
             {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入"},
-            {"claim_id": "A1", "claim_type": "assumption", "text": "需求将延续", "source_ids": ["OFF001"], "evidence_boundary": "仅在用户需求继续增长时成立"},
+            {"claim_id": "A1", "claim_type": "assumption", "text": "需求将延续", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入", "evidence_boundary": "仅在用户需求继续增长时成立"},
             {"claim_id": "A2", "claim_type": "assumption", "text": "无来源假设", "source_ids": [], "evidence_boundary": "仅为情景，不进入批准图"},
         ]
 
@@ -557,6 +561,43 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         self.assertEqual(set(audit["blocked_claim_ids"]), {"F1", "C1", "J1", "A1", "X1"})
         self.assertEqual(approved["claims"], [])
+
+    def test_unrelated_or_pending_assumption_is_blocked(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        clean = {"sources": [{"source_id": "S1", "key_facts": ["收入增长支持扩产"]}], "approved_source_ids": ["S1"]}
+        claims = {"claims": [
+            {"claim_id": "A1", "claim_type": "assumption", "text": "天气持续晴朗", "source_ids": ["S1"], "reasoning_basis": "天气持续晴朗", "evidence_boundary": "待验证", "verification_status": "pending"},
+            {"claim_id": "A2", "claim_type": "assumption", "text": "收入增长将持续", "source_ids": ["S1"], "reasoning_basis": "收入增长支持扩产", "evidence_boundary": "仅限当前趋势"},
+        ]}
+        audit, approved = WorkflowOrchestrator().audit_claim_graph(claims, clean)
+        self.assertEqual(audit["blocked_claim_ids"], ["A1"])
+        self.assertEqual(approved["approved_claim_ids"], ["A2"])
+
+    def test_formal_workflow_requires_humanizer_before_final_report(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("测试")
+        waiting_outline = orchestrator.resume_gate_workflow(state, "确认")
+        waiting_humanizer = orchestrator.resume_gate_workflow(waiting_outline, {"selection": "A"})
+        self.assertEqual(waiting_humanizer["pending_gate"], "humanizer_required")
+        self.assertNotIn("FinalReport", waiting_humanizer["artifacts"])
+
+    def test_submitted_humanization_runs_integrity_and_blocks_tampering(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("测试")
+        state = orchestrator.resume_gate_workflow(state, "确认")
+        state = orchestrator.resume_gate_workflow(state, {"selection": "A"})
+        draft = state["artifacts"]["ReportDraft"]["markdown"]
+        passed = orchestrator.resume_gate_workflow(state, {"humanized_markdown": draft.replace("本节围绕", "本章聚焦", 1), "change_log": {"changed_sections": ["第一节"], "style_only": True, "unchanged_fact_confirmation": True}})
+        self.assertEqual(passed["pending_gate"], "final_report_review")
+        self.assertEqual(passed["artifacts"]["IntegrityDiff"]["status"], "passed")
+        tampered = orchestrator.resume_gate_workflow(state, {"humanized_markdown": draft.replace("2026", "2099", 1), "change_log": {"changed_sections": ["第一节"], "style_only": True, "unchanged_fact_confirmation": True}})
+        self.assertEqual(tampered["status"], "blocked")
+        self.assertEqual(tampered["artifacts"]["IntegrityDiff"]["status"], "failed")
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator

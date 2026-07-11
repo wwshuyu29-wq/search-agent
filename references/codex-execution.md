@@ -267,7 +267,7 @@ SourceListFragment
 8. Framework Analyst + Specialist Agents 生成 ClaimGraph。
 9. Citation Auditor Agent 校验每条 claim 是否真的被来源支持。
 10. Report Writer Agent 选择报告形态并生成 ReportDraft。
-11. Humanizer Editor Agent 只做表达层去 AI 味，保留事实、数字、引用和风险边界。
+11. Humanizer Editor Agent 必须由真实 callable/adapter 或外部改写结果执行，只做表达层去 AI 味，保留事实、数字、引用和风险边界。production 未注入 adapter 时流程停在 `pending_gate=humanizer_required`，不得以 identity copy 生成 `FinalReport`。CLI 可用 `--workflow-resume humanized --humanized-file <report.md> --change-log-file <changes.json>` 提交真实改写并继续 IntegrityDiff。
 
 ## 默认不采用
 
