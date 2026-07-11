@@ -525,8 +525,11 @@ class WorkflowOrchestrator:
             before_sentence = before[index]
             before_core = self._style_normalized_sentence(before_sentence)
             after_core = self._style_normalized_sentence(after_sentence)
+            before_connective = self._leading_connective_group(before_sentence)
+            after_connective = self._leading_connective_group(after_sentence)
+            connectives_match = before_connective == after_connective
             anchors_match = self._sentence_anchors(before_sentence) == self._sentence_anchors(after_sentence)
-            approved = anchors_match and before_core == after_core
+            approved = anchors_match and connectives_match and before_core == after_core
             mappings.append({"before": before_sentence, "after": after_sentence, "approved": approved})
             if not approved:
                 unapproved.append(after_sentence)
@@ -535,6 +538,18 @@ class WorkflowOrchestrator:
     def _style_normalized_sentence(self, sentence: str) -> str:
         text = re.sub(r"^[\s]*(?:所以|因此|因而|于是|同时|此外|不过|然而)[，,：:]?\s*", "", sentence, flags=re.I)
         return re.sub(r"[\s，,。.!！？?；;：:]", "", text).lower()
+
+    def _leading_connective_group(self, sentence: str):
+        match = re.match(r"^\s*(所以|因此|因而|于是|同时|此外|不过|然而)(?:[，,：:]?\s*)", sentence, re.I)
+        if not match:
+            return None
+        connective = match.group(1)
+        groups = {
+            "causal": {"所以", "因此", "因而", "于是"},
+            "additive": {"同时", "此外"},
+            "contrast": {"不过", "然而"},
+        }
+        return next(group for group, members in groups.items() if connective in members)
 
     def _sentence_anchors(self, sentence: str):
         pattern = r"\b(?:OFF|MED|RSS|NEWS|UGC|FIN|MKT)\d{3}\b|\bCLM?\d{3}\b|https?://[^\s)]+|\d+(?:\.\d+)?"

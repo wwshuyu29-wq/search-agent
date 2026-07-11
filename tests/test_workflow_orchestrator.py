@@ -609,7 +609,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertEqual(integrity["status"], "failed")
         self.assertEqual(integrity["new_unapproved_sentences"], ["建立壁垒。"])
 
-    def test_integrity_allows_punctuation_and_connective_style_edits(self):
+    def test_integrity_allows_punctuation_and_same_group_connective_edits(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
         draft = {"markdown": "# 报告\n\n## 结论\n\n所以，现有渠道覆盖核心用户。\n"}
@@ -619,6 +619,39 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         self.assertEqual(integrity["status"], "passed")
         self.assertEqual(integrity["new_unapproved_sentences"], [])
+
+    def test_integrity_blocks_adding_a_connective_to_one_side(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n因此，现有渠道覆盖核心用户！\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "failed")
+        self.assertEqual(integrity["new_unapproved_sentences"], ["因此，现有渠道覆盖核心用户！"])
+
+    def test_integrity_blocks_deleting_a_connective_from_one_side(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n同时，现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户！\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "failed")
+        self.assertEqual(integrity["new_unapproved_sentences"], ["现有渠道覆盖核心用户！"])
+
+    def test_integrity_blocks_cross_group_connective_replacement(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n不过，现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n此外，现有渠道覆盖核心用户！\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "failed")
+        self.assertEqual(integrity["new_unapproved_sentences"], ["此外，现有渠道覆盖核心用户！"])
 
     def test_integrity_blocks_added_words_within_an_existing_sentence(self):
         from workflow_orchestrator import WorkflowOrchestrator
