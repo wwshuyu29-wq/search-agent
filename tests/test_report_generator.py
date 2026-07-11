@@ -35,20 +35,20 @@ class ReportGeneratorTest(unittest.TestCase):
                     "heading": "现象与关键问题",
                     "purpose": "定义变化",
                     "required_claim_ids": ["C001"],
-                    "word_budget": 500,
+                    "word_budget": 255,
                 },
                 {
                     "section_id": "S2",
                     "heading": "战略含义与优先议题",
                     "purpose": "形成建议",
                     "required_claim_ids": ["C002"],
-                    "word_budget": 600,
+                    "word_budget": 225,
                 },
             ],
         }
         claims = [
-            {"claim_id": "C001", "content": "高德发布新功能。", "source_ids": ["OFF001"]},
-            {"claim_id": "C002", "content": "百度地图应验证用户价值。", "source_ids": ["MED001"]},
+            {"claim_id": "C001", "claim_type": "fact", "content": "高德发布新功能。", "source_ids": ["OFF001"], "audit_status": "passed", "evidence_text": "高德发布新功能。"},
+            {"claim_id": "C002", "claim_type": "judgment", "content": "百度地图应验证用户价值。", "source_ids": ["MED001"], "audit_status": "passed", "reasoning_basis": "媒体分析支持验证用户价值"},
         ]
         sources = [
             {"source_id": "OFF001", "title": "官方更新", "url": "https://example.com/official"},
@@ -71,6 +71,29 @@ class ReportGeneratorTest(unittest.TestCase):
         self.assertNotIn("核心结论", [section["heading"] for section in report["sections"]])
         self.assertIn("# 现象与关键问题", report["markdown"])
         self.assertLess(report["markdown"].index("# 现象与关键问题"), report["markdown"].index("# 战略含义与优先议题"))
+
+    def test_generate_from_approved_outline_enforces_symmetric_word_budget(self):
+        report_module = load_module("report_generator_budget_test", REPO_ROOT / "lib" / "report_generator.py")
+        generator = report_module.ReportGenerator()
+        claim = {"claim_id": "C1", "claim_type": "fact", "text": "用户需求增长", "source_ids": ["S1"], "audit_status": "passed", "evidence_text": "用户需求增长", "evidence_boundary": "仅覆盖当前样本"}
+        source = {"source_id": "S1", "title": "来源", "url": "https://example.com", "key_facts": ["用户需求增长"]}
+
+        def outline(budget):
+            return {"selected_outline_id": "A", "approved_by_user": True, "title": "报告", "target_reader": "业务团队", "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "结论", "purpose": "判断是否投入", "required_claim_ids": ["C1"], "word_budget": budget}]}
+
+        report = generator.generate_from_approved_outline(outline(210), [claim], [source], "主题", "是否投入")
+        self.assertGreaterEqual(report["sections"][0]["actual_word_count"], 189)
+        self.assertLessEqual(report["sections"][0]["actual_word_count"], 231)
+        with self.assertRaisesRegex(ValueError, "needs_expansion"):
+            generator.generate_from_approved_outline(outline(600), [claim], [source], "主题", "是否投入")
+        with self.assertRaisesRegex(ValueError, "over_budget"):
+            generator.generate_from_approved_outline(outline(40), [claim], [source], "主题", "是否投入")
+
+    def test_generate_from_approved_outline_consumes_only_passed_claims(self):
+        report_module = load_module("report_generator_passed_claims_test", REPO_ROOT / "lib" / "report_generator.py")
+        outline = {"selected_outline_id": "A", "approved_by_user": True, "title": "报告", "target_reader": "团队", "writing_logic": "证据", "sections": [{"section_id": "S1", "heading": "结论", "purpose": "决策", "required_claim_ids": ["C1"], "word_budget": 100}]}
+        with self.assertRaisesRegex(ValueError, "missing claims"):
+            report_module.ReportGenerator().generate_from_approved_outline(outline, [{"claim_id": "C1", "text": "未审核", "source_ids": ["S1"]}], [{"source_id": "S1"}], "主题", "决策")
 
     def test_generate_from_approved_outline_blocks_unapproved_outline(self):
         report_module = load_module(
@@ -299,7 +322,7 @@ class ReportGeneratorTest(unittest.TestCase):
         outline = {
             "selected_outline_id": "outline_a", "approved_by_user": True,
             "report_family": "deep_research_report", "title": "测试", "target_reader": "管理层",
-            "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "判断", "purpose": "综合事实形成决策判断", "required_claim_ids": ["C1", "C2"], "word_budget": 120}],
+            "writing_logic": "证据到决策", "sections": [{"section_id": "S1", "heading": "判断", "purpose": "综合事实形成决策判断", "required_claim_ids": ["C1", "C2"], "word_budget": 350}],
         }
         claims = [
             {"claim_id": "C1", "claim_type": "fact", "text": "收入增长。", "source_ids": ["OFF001"], "audit_status": "passed"},
@@ -308,10 +331,11 @@ class ReportGeneratorTest(unittest.TestCase):
         report = generator.generate_from_approved_outline(outline, claims, [{"source_id": "OFF001", "title": "公告", "url": "https://example.com"}], "主题", "是否投入")
         section = report["sections"][0]
         self.assertEqual(section["claim_ids"], ["C1", "C2"])
-        self.assertIn("事实：", section["content"])
-        self.assertIn("判断：", section["content"])
+        self.assertIn("事实依据：", section["content"])
+        self.assertIn("判断依据：", section["content"])
         self.assertIn("综合事实形成决策判断", section["content"])
-        self.assertLessEqual(section["actual_word_count"], 180)
+        self.assertGreaterEqual(section["actual_word_count"], 315)
+        self.assertLessEqual(section["actual_word_count"], 385)
 
     def test_evidence_synthesis_blocks_missing_required_claim(self):
         from report_generator import ReportGenerator

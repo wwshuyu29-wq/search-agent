@@ -2782,7 +2782,7 @@ def build_outline_candidates(intent_brief: Dict[str, Any], claim_ids: Optional[L
                     "heading": heading,
                     "purpose": purpose,
                     "required_claim_ids": assigned,
-                    "word_budget": 600 if index not in (1, len(archetype["sections"])) else 450,
+                    "word_budget": max(220, 310 * len(assigned)),
                 }
             )
         candidates.append(
@@ -2850,7 +2850,7 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
     missing = [heading for heading in expected if heading not in actual]
     unexpected = [heading for heading in actual if heading not in expected]
     expected_by_heading = {section.get("heading"): section for section in approved_outline.get("sections", [])}
-    purpose_gaps, evidence_gaps, missing_required_claim_ids, needs_expansion = [], [], [], []
+    purpose_gaps, evidence_gaps, missing_required_claim_ids, needs_expansion, over_budget = [], [], [], [], []
     for section in report_draft.get("sections", []):
         heading = section.get("heading")
         contract = expected_by_heading.get(heading, {})
@@ -2868,9 +2868,11 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
             evidence_gaps.append(heading)
         budget = int(contract.get("word_budget", section.get("word_budget", 0)) or 0)
         actual_count = int(section.get("actual_word_count", len(content.replace(" ", ""))) or 0)
-        if budget and actual_count < max(1, int(budget * 0.10)):
+        if budget and actual_count < max(1, int(budget * 0.90)):
             needs_expansion.append(heading)
-    passed = not missing and not unexpected and actual == expected and not purpose_gaps and not evidence_gaps and not needs_expansion
+        if budget and actual_count > int(budget * 1.10):
+            over_budget.append(heading)
+    passed = not missing and not unexpected and actual == expected and not purpose_gaps and not evidence_gaps and not needs_expansion and not over_budget
     return {
         "status": "passed" if passed else "blocked",
         "missing_sections": missing,
@@ -2880,6 +2882,7 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
         "evidence_gaps": evidence_gaps,
         "missing_required_claim_ids": missing_required_claim_ids,
         "needs_expansion": needs_expansion,
+        "over_budget": over_budget,
     }
 
 

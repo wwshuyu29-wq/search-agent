@@ -592,23 +592,41 @@ class WorkflowOrchestrator:
         return {"claims": claims}
 
     def audit_claim_graph(self, claim_graph: Dict[str, Any], clean_source_list: Dict[str, Any]):
-        """Approve factual claims only when all cited, approved sources really exist."""
+        """Audit every claim type before it can enter ApprovedClaimGraph."""
         source_map = {s.get("source_id"): s for s in clean_source_list.get("sources", [])}
         approved_source_ids = set(clean_source_list.get("approved_source_ids", source_map))
         approved, blocked, issues = [], [], []
+        valid_types = {"fact", "calculation", "assumption", "judgment"}
         for claim in claim_graph.get("claims", []):
+            claim_type = claim.get("claim_type")
             cited = claim.get("source_ids", [])
             reason = None
-            if claim.get("claim_type") == "fact" and not cited:
-                reason = "fact claim has no source"
+            if claim_type not in valid_types:
+                reason = "unknown claim_type"
+            elif not cited:
+                reason = f"{claim_type} claim has no source and is excluded from ApprovedClaimGraph"
             elif any(sid not in source_map or sid not in approved_source_ids for sid in cited):
                 reason = "source_id missing or not approved"
-            elif claim.get("claim_type") == "fact" and any(source_map[sid].get("method_source") for sid in cited):
-                reason = "method source cannot support market fact"
-            elif claim.get("claim_type") == "fact" and not self._claim_has_textual_support(claim, [source_map[sid] for sid in cited]):
-                reason = "cited source exists but key_facts/support_excerpt do not support claim text"
-            elif claim.get("claim_type") not in {"fact", "calculation", "assumption", "judgment"}:
-                reason = "claim_type must explicitly distinguish fact from judgment"
+            elif any(source_map[sid].get("method_source") for sid in cited):
+                reason = "method source cannot support an approved claim"
+            else:
+                sources = [source_map[sid] for sid in cited]
+                if claim_type == "fact" and not self._claim_has_textual_support(claim, sources):
+                    reason = "source evidence does not textually support fact"
+                elif claim_type == "calculation":
+                    if not (claim.get("evidence_text") or claim.get("support_excerpt")):
+                        reason = "calculation requires evidence_text/support_excerpt"
+                    elif not claim.get("calculation_inputs") or not claim.get("formula"):
+                        reason = "calculation requires verifiable inputs and formula"
+                    elif not self._claim_has_textual_support(claim, sources):
+                        reason = "source evidence does not support calculation"
+                elif claim_type == "judgment":
+                    if not claim.get("reasoning_basis"):
+                        reason = "judgment requires reasoning_basis"
+                    elif not self._text_has_source_support(claim["reasoning_basis"], sources):
+                        reason = "judgment reasoning_basis is not linked to source evidence"
+                elif claim_type == "assumption" and not claim.get("evidence_boundary"):
+                    reason = "assumption requires explicit evidence_boundary"
             if reason:
                 blocked.append(claim.get("claim_id")); issues.append({"claim_id": claim.get("claim_id"), "reason": reason})
             else:
@@ -620,6 +638,21 @@ class WorkflowOrchestrator:
     def _normalize_evidence_text(self, value: Any) -> str:
         return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value).lower())
 
+    def _text_has_source_support(self, value: Any, sources: List[Dict[str, Any]]) -> bool:
+        text = self._normalize_evidence_text(value)
+        negation_pairs = (("增长", "下降"), ("建议", "不建议"), ("上升", "下滑"), ("盈利", "亏损"))
+        excerpts = []
+        for source in sources:
+            excerpts.extend(source.get("key_facts", []))
+            excerpts.extend([source.get("support_excerpt"), source.get("evidence_text")])
+        normalized = [self._normalize_evidence_text(item) for item in excerpts if item]
+        for positive, negative in negation_pairs:
+            if positive in text and any(negative in item for item in normalized):
+                return False
+            if negative in text and any(positive in item and negative not in item for item in normalized):
+                return False
+        return bool(text) and any(text in item or item in text for item in normalized if item)
+
     def _claim_has_textual_support(self, claim: Dict[str, Any], sources: List[Dict[str, Any]]) -> bool:
         claim_text = self._normalize_evidence_text(claim.get("text", ""))
         excerpts = [claim.get("evidence_text"), claim.get("support_excerpt")]
@@ -627,9 +660,10 @@ class WorkflowOrchestrator:
             excerpts.extend(source.get("key_facts", []))
             excerpts.append(source.get("support_excerpt"))
         normalized = [self._normalize_evidence_text(text) for text in excerpts if text]
-        if claim.get("evidence_hash") and any(hashlib.sha256(text.encode("utf-8")).hexdigest() == claim["evidence_hash"] for text in normalized):
+        source_supported = self._text_has_source_support(claim.get("evidence_text") or claim.get("support_excerpt") or claim.get("text"), sources)
+        if claim.get("evidence_hash") and source_supported and any(hashlib.sha256(text.encode("utf-8")).hexdigest() == claim["evidence_hash"] for text in normalized):
             return True
-        return bool(claim_text) and any(claim_text in text or text in claim_text for text in normalized if text)
+        return source_supported and bool(claim_text) and any(claim_text in text or text in claim_text for text in normalized if text)
 
     def _run_after_audit_confirmation(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
         artifacts = deepcopy(state["artifacts"])

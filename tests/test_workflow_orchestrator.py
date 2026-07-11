@@ -416,7 +416,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         state["artifacts"]["OutlinePlan"] = __import__("workflow_contracts").build_outline_candidates(
             state["artifacts"]["IntentBrief"], ["CL001"]
         )
-        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 120}]
+        override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 190}]
 
         completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override, "approved_by_user": True})
 
@@ -516,6 +516,47 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertIn("结论", review["purpose_gaps"])
         self.assertIn("CL002", review["missing_required_claim_ids"])
         self.assertIn("结论", review["needs_expansion"])
+
+    def test_citation_audit_enforces_each_claim_type_and_excludes_unsupported_assumption(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        source = {
+            "source_id": "OFF001",
+            "method_source": False,
+            "key_facts": ["收入为120亿元，成本为100亿元，因此利润为20亿元。用户需求增长支持优先投入。"],
+            "support_excerpt": "收入为120亿元，成本为100亿元，因此利润为20亿元。用户需求增长支持优先投入。",
+        }
+        clean = {"sources": [source], "approved_source_ids": ["OFF001"]}
+        claims = [
+            {"claim_id": "F1", "claim_type": "fact", "text": "收入为120亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元"},
+            {"claim_id": "C1", "claim_type": "calculation", "text": "利润为20亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元，成本为100亿元，因此利润为20亿元", "calculation_inputs": {"revenue": 120, "cost": 100}, "formula": "revenue - cost"},
+            {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入"},
+            {"claim_id": "A1", "claim_type": "assumption", "text": "需求将延续", "source_ids": ["OFF001"], "evidence_boundary": "仅在用户需求继续增长时成立"},
+            {"claim_id": "A2", "claim_type": "assumption", "text": "无来源假设", "source_ids": [], "evidence_boundary": "仅为情景，不进入批准图"},
+        ]
+
+        audit, approved = WorkflowOrchestrator().audit_claim_graph({"claims": claims}, clean)
+
+        self.assertEqual(audit["approved_claim_ids"], ["F1", "C1", "J1", "A1"])
+        self.assertEqual(audit["blocked_claim_ids"], ["A2"])
+        self.assertEqual([claim["claim_id"] for claim in approved["claims"]], ["F1", "C1", "J1", "A1"])
+
+    def test_citation_audit_blocks_invalid_metadata_unknown_type_and_opposite_content(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        clean = {"sources": [{"source_id": "OFF001", "method_source": False, "key_facts": ["收入下降5%，不建议投入"]}], "approved_source_ids": ["OFF001"]}
+        claims = [
+            {"claim_id": "F1", "claim_type": "fact", "text": "收入增长20%", "source_ids": ["OFF001"], "evidence_text": "收入增长20%"},
+            {"claim_id": "C1", "claim_type": "calculation", "text": "利润20", "source_ids": ["OFF001"], "evidence_text": "利润20"},
+            {"claim_id": "J1", "claim_type": "judgment", "text": "建议投入", "source_ids": ["OFF001"], "reasoning_basis": "建议投入"},
+            {"claim_id": "A1", "claim_type": "assumption", "text": "需求延续", "source_ids": ["OFF001"]},
+            {"claim_id": "X1", "claim_type": "forecast", "text": "增长", "source_ids": ["OFF001"]},
+        ]
+
+        audit, approved = WorkflowOrchestrator().audit_claim_graph({"claims": claims}, clean)
+
+        self.assertEqual(set(audit["blocked_claim_ids"]), {"F1", "C1", "J1", "A1", "X1"})
+        self.assertEqual(approved["claims"], [])
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator

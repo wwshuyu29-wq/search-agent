@@ -313,7 +313,11 @@ class ReportGenerator:
         if not outline_sections:
             raise ValueError("ApprovedOutline 至少需要一个章节。")
 
-        claims_by_id = {claim.get("claim_id"): claim for claim in approved_claims if claim.get("claim_id")}
+        claims_by_id = {
+            claim.get("claim_id"): claim
+            for claim in approved_claims
+            if claim.get("claim_id") and claim.get("audit_status") == "passed"
+        }
         source_map = {source.get("source_id"): source for source in sources if source.get("source_id")}
         draft_sections: List[Dict[str, Any]] = []
         markdown_parts = [
@@ -332,25 +336,33 @@ class ReportGenerator:
             if missing_claim_ids:
                 raise ValueError(f"ApprovedOutline requires missing claims: {', '.join(missing_claim_ids)}")
             section_claims = [claims_by_id[claim_id] for claim_id in claim_ids]
-            paragraphs: List[str] = [f"本节面向{approved_outline.get('target_reader', '读者')}，围绕“{section_contract.get('purpose', '')}”回答“{decision}”。"]
+            purpose = section_contract.get("purpose", "")
+            paragraphs: List[str] = [f"本节围绕“{purpose}”回答“{decision}”，供{approved_outline.get('target_reader', '读者')}据此判断下一步行动。"]
             for claim in section_claims:
                 content = claim.get("content") or claim.get("claim") or claim.get("text") or ""
                 citations = []
+                evidence_meanings = []
                 for source_id in claim.get("source_ids", []):
                     source = source_map.get(source_id, {})
                     url = source.get("url") or source.get("canonical_url") or ""
                     citations.append(f"[{source_id}]({url})" if url else source_id)
-                suffix = f"（来源：{', '.join(citations)}）" if citations else "（证据：[待补证据]）"
-                claim_type = claim.get("claim_type", "judgment")
-                type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}.get(claim_type, "判断")
-                paragraphs.append(f"{type_label}：{content}{suffix}")
-            if not paragraphs:
-                paragraphs.append(
-                    f"[待扩写] 本节需要完成：{section_contract.get('purpose', '')}。"
-                    f" 当前证据槽位：{', '.join(claim_ids) or '[待补证据]'}。"
-                )
+                    evidence_meanings.extend(source.get("key_facts", []))
+                suffix = f"（来源：{', '.join(citations)}）"
+                type_label = {"fact": "事实", "calculation": "计算", "assumption": "假设", "judgment": "判断"}[claim["claim_type"]]
+                paragraphs.append(f"{type_label}依据：{content}{suffix}")
+                evidence = claim.get("evidence_text") or claim.get("support_excerpt") or "；".join(evidence_meanings)
+                if evidence:
+                    paragraphs.append(f"证据含义：{evidence}。这说明该证据与“{purpose}”直接相关，而不是脱离决策问题的背景信息。")
+                paragraphs.append(f"业务启示：针对“{decision}”，应把上述结论转化为可验证动作，并以该证据所覆盖的对象和期间作为适用范围。")
+                boundary = claim.get("evidence_boundary") or "现有来源只支持所引述事实，不支持超出样本、期间或口径的外推"
+                paragraphs.append(f"证据边界：{boundary}。若边界条件改变，应补充来源并重新审核，不能沿用本节判断。")
             actual_word_count = len("".join(paragraphs).replace(" ", ""))
-            word_budget = section_contract.get("word_budget", 600)
+            word_budget = int(section_contract.get("word_budget", 600))
+            lower, upper = int(word_budget * 0.90), int(word_budget * 1.10)
+            if actual_word_count < lower:
+                raise ValueError(f"needs_expansion: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}")
+            if actual_word_count > upper:
+                raise ValueError(f"over_budget: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}")
             draft_section = {
                 "section_id": section_contract.get("section_id"),
                 "heading": heading,
