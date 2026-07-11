@@ -4,6 +4,7 @@
 
 from copy import deepcopy
 from datetime import datetime
+import hashlib
 import re
 from typing import Any, Dict, List
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -277,6 +278,18 @@ class WorkflowOrchestrator:
 
         if pending_gate == "outline_approved_by_user":
             decision = user_decision if isinstance(user_decision, dict) else {"selection": normalized_decision}
+            selection = str(decision.get("selection", "")).strip().upper()
+            override = decision.get("sections_override")
+            explicitly_approved = decision.get("approved_by_user") is True
+            valid_choice = selection in {"A", "B", "C"} and override is None
+            valid_override = explicitly_approved and self._valid_sections_override(override)
+            if not (valid_choice or valid_override):
+                waiting = deepcopy(state)
+                waiting["status"] = "waiting_for_user"
+                waiting["user_decision"] = normalized_decision or str(user_decision)
+                waiting["next_action"] = "请选择 A/B/C；自定义大纲必须提供结构有效的 sections_override 且 approved_by_user=true。"
+                waiting["updated_at"] = self._timestamp()
+                return waiting
             return self._run_after_outline_approval(state, decision)
 
         if pending_gate == "final_report_review":
@@ -293,6 +306,18 @@ class WorkflowOrchestrator:
             return reviewed
 
         raise ValueError(f"Cannot resume workflow from pending_gate={pending_gate!r}")
+
+    def _valid_sections_override(self, sections: Any) -> bool:
+        return bool(sections) and isinstance(sections, list) and all(
+            isinstance(section, dict)
+            and bool(str(section.get("heading", "")).strip())
+            and bool(str(section.get("purpose", "")).strip())
+            and isinstance(section.get("required_claim_ids"), list)
+            and bool(section.get("required_claim_ids"))
+            and isinstance(section.get("word_budget"), int)
+            and section.get("word_budget") > 0
+            for section in sections
+        )
 
     def _missing_fields(self, artifact_name: str, artifact: Any, required_fields: List[str]) -> List[str]:
         if artifact_name == "SearchPlan":
@@ -419,7 +444,7 @@ class WorkflowOrchestrator:
         }
         return raw_source_list, merger_log
 
-    def build_integrity_diff(self, report_draft: Dict[str, Any], final_report: Dict[str, Any]) -> Dict[str, Any]:
+    def build_integrity_diff(self, report_draft: Dict[str, Any], final_report: Dict[str, Any], humanizer_change_log: Dict[str, Any] = None) -> Dict[str, Any]:
         """Detect evidence-bearing changes between ReportDraft and FinalReport."""
         before = report_draft.get("markdown", "")
         after = final_report.get("markdown", "")
@@ -427,19 +452,35 @@ class WorkflowOrchestrator:
         changed_dates = self._changed_tokens(before, after, r"\d{4}-\d{1,2}-\d{1,2}|\d{4}年\d{1,2}月\d{1,2}日")
         changed_source_ids = self._changed_tokens(before, after, r"\b(?:OFF|MED|RSS|NEWS|UGC|FIN|MKT)\d{3}\b")
         changed_claim_ids = self._changed_tokens(before, after, r"\bCLM?\d{3}\b")
-        status = "passed"
-        if changed_numbers or changed_dates or changed_source_ids or changed_claim_ids:
-            status = "failed"
+        changed_confidence = self._changed_tokens(before, after, r"(?:置信度|confidence)\s*[：:]?\s*(?:高|中|低|high|medium|low)")
+        risk_pattern = r"[^。.!?]*(?:风险|不确定|限制|risk|uncertain|limit)[^。.!?]*[。.!?]?"
+        risk_boundary_changes = self._changed_tokens(before, after, risk_pattern)
+        before_sentences = set(self._sentences(before))
+        new_factual_sentences = [sentence for sentence in self._sentences(after) if sentence not in before_sentences and self._looks_factual(sentence)]
+        log = humanizer_change_log or {}
+        log_violations = []
+        if humanizer_change_log is not None and log.get("style_only") is not True:
+            log_violations.append("style_only must be true")
+        if humanizer_change_log is not None and log.get("unchanged_fact_confirmation") is not True:
+            log_violations.append("unchanged_fact_confirmation must be true")
+        failures = changed_numbers or changed_dates or changed_source_ids or changed_claim_ids or changed_confidence or risk_boundary_changes or new_factual_sentences or log_violations
         return {
-            "status": status,
+            "status": "failed" if failures else "passed",
             "changed_numbers": changed_numbers,
             "changed_dates": changed_dates,
             "changed_source_ids": changed_source_ids,
             "changed_claim_ids": changed_claim_ids,
-            "changed_confidence": [],
-            "risk_boundary_changes": [],
-            "new_factual_sentences": [],
+            "changed_confidence": changed_confidence,
+            "risk_boundary_changes": risk_boundary_changes,
+            "new_factual_sentences": new_factual_sentences,
+            "humanizer_log_violations": log_violations,
         }
+
+    def _sentences(self, text: str) -> List[str]:
+        return [part.strip() for part in re.split(r"(?<=[。.!?])\s*|\n+", text) if part.strip()]
+
+    def _looks_factual(self, sentence: str) -> bool:
+        return bool(re.search(r"\d|来源|发布|增长|下降|达到|收入|份额|\b(?:is|was|grew|fell|reached)\b", sentence, re.I))
 
     def _canonical_url(self, url: str) -> str:
         if not url:
@@ -546,7 +587,8 @@ class WorkflowOrchestrator:
                 continue
             for fact in source.get("key_facts", []):
                 if fact:
-                    claims.append({"claim_id": f"CL{len(claims)+1:03d}", "dimension": source.get("source_type", "evidence"), "claim_type": "fact", "text": fact, "source_ids": [source["source_id"]], "confidence": source.get("confidence", "medium"), "reasoning_basis": "verbatim source key fact"})
+                    normalized = self._normalize_evidence_text(fact)
+                    claims.append({"claim_id": f"CL{len(claims)+1:03d}", "dimension": source.get("source_type", "evidence"), "claim_type": "fact", "text": fact, "source_ids": [source["source_id"]], "confidence": source.get("confidence", "medium"), "reasoning_basis": "verbatim source key fact", "evidence_text": fact, "evidence_hash": hashlib.sha256(normalized.encode("utf-8")).hexdigest()})
         return {"claims": claims}
 
     def audit_claim_graph(self, claim_graph: Dict[str, Any], clean_source_list: Dict[str, Any]):
@@ -563,6 +605,10 @@ class WorkflowOrchestrator:
                 reason = "source_id missing or not approved"
             elif claim.get("claim_type") == "fact" and any(source_map[sid].get("method_source") for sid in cited):
                 reason = "method source cannot support market fact"
+            elif claim.get("claim_type") == "fact" and not self._claim_has_textual_support(claim, [source_map[sid] for sid in cited]):
+                reason = "cited source exists but key_facts/support_excerpt do not support claim text"
+            elif claim.get("claim_type") not in {"fact", "calculation", "assumption", "judgment"}:
+                reason = "claim_type must explicitly distinguish fact from judgment"
             if reason:
                 blocked.append(claim.get("claim_id")); issues.append({"claim_id": claim.get("claim_id"), "reason": reason})
             else:
@@ -570,6 +616,20 @@ class WorkflowOrchestrator:
         status = "passed" if approved and not blocked else "failed"
         audit = {"status": status, "issues": issues, "required_rewrites": issues, "approved_claim_ids": [c["claim_id"] for c in approved], "blocked_claim_ids": blocked}
         return audit, {"approved_claim_ids": audit["approved_claim_ids"], "claims": approved}
+
+    def _normalize_evidence_text(self, value: Any) -> str:
+        return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value).lower())
+
+    def _claim_has_textual_support(self, claim: Dict[str, Any], sources: List[Dict[str, Any]]) -> bool:
+        claim_text = self._normalize_evidence_text(claim.get("text", ""))
+        excerpts = [claim.get("evidence_text"), claim.get("support_excerpt")]
+        for source in sources:
+            excerpts.extend(source.get("key_facts", []))
+            excerpts.append(source.get("support_excerpt"))
+        normalized = [self._normalize_evidence_text(text) for text in excerpts if text]
+        if claim.get("evidence_hash") and any(hashlib.sha256(text.encode("utf-8")).hexdigest() == claim["evidence_hash"] for text in normalized):
+            return True
+        return bool(claim_text) and any(claim_text in text or text in claim_text for text in normalized if text)
 
     def _run_after_audit_confirmation(self, state: Dict[str, Any], user_decision: str) -> Dict[str, Any]:
         artifacts = deepcopy(state["artifacts"])
@@ -725,11 +785,19 @@ class WorkflowOrchestrator:
         validations = deepcopy(state.get("validations", []))
         phase_results = deepcopy(state.get("phase_results", []))
         candidates = artifacts["OutlinePlan"]["candidates"]
-        selection = str(decision.get("selection", "A")).strip().upper()
-        selected_id = candidates[ord(selection) - ord("A")]["outline_id"] if selection in {"A", "B", "C"} else artifacts["OutlinePlan"]["recommended_outline_id"]
-        approved_outline = approve_outline(artifacts["OutlinePlan"], selected_id, approved_by_user=True)
-        if decision.get("sections_override"):
-            approved_outline["sections"] = deepcopy(decision["sections_override"])
+        selection = str(decision.get("selection", "")).strip().upper()
+        override = decision.get("sections_override")
+        if selection in {"A", "B", "C"}:
+            selected_id = candidates[ord(selection) - ord("A")]["outline_id"]
+        elif decision.get("approved_by_user") is True and self._valid_sections_override(override):
+            selected_id = artifacts["OutlinePlan"]["recommended_outline_id"]
+        else:
+            raise ValueError("大纲选择必须是 A/B/C；自定义大纲必须结构有效且 approved_by_user=true。")
+        approved_outline = approve_outline(
+            artifacts["OutlinePlan"], selected_id, approved_by_user=True,
+            sections_override=override if override is not None else None,
+        )
+        if override is not None:
             approved_outline["selected_outline_id"] = selected_id + "_custom"
         artifacts["ApprovedOutline"] = approved_outline
         validations.append(self.validate_artifact("ApprovedOutline", approved_outline))

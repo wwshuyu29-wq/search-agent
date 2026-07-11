@@ -404,6 +404,20 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertIn("opencli", twitter["key_facts"][0])
         self.assertIn("read-only", twitter["key_facts"][0])
 
+    def test_twitter_opencli_timeout_uses_configured_timeout_and_degrades(self):
+        import subprocess
+        from source_hunter_executor import SourceHunterExecutor
+
+        executor = SourceHunterExecutor(env={"SEARCH_AGENT_SUBPROCESS_TIMEOUT": "7"})
+        spec = {"why_use": "sentiment", "output_artifact": "sources", "use_well": "read only"}
+        with patch("source_hunter_executor.shutil.which", return_value="/usr/bin/opencli"), patch(
+            "source_hunter_executor.subprocess.run", side_effect=subprocess.TimeoutExpired(["opencli"], 7)
+        ) as run:
+            rows = executor._twitter_reader_runner("AAPL", limit=2, spec=spec)
+        self.assertEqual(run.call_args.kwargs["timeout"], 7.0)
+        self.assertIn("timed out", rows[0]["summary"])
+        self.assertEqual(rows[0]["confidence"], "low")
+
     def test_finance_data_hunter_routes_generic_opencli_missing_setup(self):
         from source_hunter_executor import SourceHunterExecutor
 

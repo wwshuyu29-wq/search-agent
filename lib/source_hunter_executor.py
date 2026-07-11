@@ -471,7 +471,17 @@ class SourceHunterExecutor:
             "-f",
             "json",
         ]
-        completed = subprocess.run(command, capture_output=True, text=True, env=self.env, check=False)
+        try:
+            completed = subprocess.run(
+                command, capture_output=True, text=True, env=self.env, check=False,
+                timeout=float(self.env.get("SEARCH_AGENT_SUBPROCESS_TIMEOUT", "60")),
+            )
+        except subprocess.TimeoutExpired as exc:
+            return [self._finance_adapter_setup_result(
+                skill="twitter-reader",
+                summary=f"opencli twitter search timed out after {exc.timeout} seconds; retrieval degraded without evidence.",
+                confidence="low", method_source=True, fetcher="twitter-reader", spec=spec,
+            )]
         if completed.returncode != 0:
             return [
                 self._finance_adapter_setup_result(

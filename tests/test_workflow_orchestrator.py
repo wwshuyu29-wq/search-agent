@@ -418,7 +418,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         )
         override = [{"section_id": "S1", "heading": "自定义结论", "purpose": "回答决策", "required_claim_ids": ["CL001"], "word_budget": 120}]
 
-        completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override})
+        completed = orchestrator.resume_gate_workflow(state, {"selection": "A", "sections_override": override, "approved_by_user": True})
 
         self.assertTrue(completed["artifacts"]["ApprovedOutline"]["approved_by_user"])
         self.assertEqual(completed["artifacts"]["ReportDraft"]["sections"][0]["heading"], "自定义结论")
@@ -469,6 +469,53 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         invalid_outline = {"selected_outline_id": "a", "approved_by_user": False, "report_family": "x", "title": "x", "target_reader": "x", "writing_logic": "x", "sections": []}
         self.assertFalse(orchestrator.validate_artifact("ApprovedOutline", invalid_outline)["valid"])
         self.assertFalse(orchestrator.validate_artifact("OutlineComplianceReview", {"status": "failed", "missing_sections": [], "unexpected_sections": [], "order_matches": True, "purpose_gaps": [], "evidence_gaps": []})["valid"])
+
+    def test_outline_gate_rejects_implicit_or_ambiguous_approval(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("测试")
+        state["pending_gate"] = "outline_approved_by_user"
+        state["artifacts"]["OutlinePlan"] = __import__("workflow_contracts").build_outline_candidates(
+            state["artifacts"]["IntentBrief"], ["CL001"]
+        )
+        for decision in ["", "不同意", "请修改第二节", "随便选一个"]:
+            result = orchestrator.resume_gate_workflow(state, decision)
+            self.assertEqual(result["status"], "waiting_for_user")
+            self.assertNotIn("ApprovedOutline", result["artifacts"])
+
+    def test_citation_audit_blocks_existing_source_that_does_not_support_fact(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        graph = {"claims": [{"claim_id": "CL001", "claim_type": "fact", "text": "收入增长20%", "source_ids": ["OFF001"], "confidence": "high", "reasoning_basis": "analysis"}]}
+        clean = {"sources": [{"source_id": "OFF001", "key_facts": ["收入下降5%"], "method_source": False}], "approved_source_ids": ["OFF001"]}
+        audit, approved = WorkflowOrchestrator().audit_claim_graph(graph, clean)
+        self.assertEqual(audit["status"], "failed")
+        self.assertEqual(audit["blocked_claim_ids"], ["CL001"])
+        self.assertEqual(approved["claims"], [])
+
+    def test_integrity_diff_blocks_confidence_risk_new_facts_and_bad_change_log(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "置信度：低。风险：样本有限。", "sections": [{"heading": "结论", "claim_ids": ["CL001"], "content": "置信度：低。风险：样本有限。"}]}
+        final = {"markdown": "置信度：高。没有风险。市场份额达到30%。", "sections": [{"heading": "结论", "claim_ids": ["CL001"], "content": "置信度：高。没有风险。市场份额达到30%。"}]}
+        result = WorkflowOrchestrator().build_integrity_diff(draft, final, {"style_only": False, "unchanged_fact_confirmation": False})
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["changed_confidence"])
+        self.assertTrue(result["risk_boundary_changes"])
+        self.assertTrue(result["new_factual_sentences"])
+        self.assertTrue(result["humanizer_log_violations"])
+
+    def test_outline_compliance_blocks_under_budget_missing_purpose_and_required_claim(self):
+        from workflow_contracts import review_outline_compliance
+
+        outline = {"sections": [{"heading": "结论", "purpose": "回答增长策略", "required_claim_ids": ["CL001", "CL002"], "word_budget": 100}]}
+        draft = {"sections": [{"heading": "结论", "purpose_addressed": True, "claim_ids": ["CL001"], "content": "事实陈述", "actual_word_count": 4, "word_budget": 100, "budget_variance": -96}]}
+        review = review_outline_compliance(outline, draft)
+        self.assertEqual(review["status"], "blocked")
+        self.assertIn("结论", review["purpose_gaps"])
+        self.assertIn("CL002", review["missing_required_claim_ids"])
+        self.assertIn("结论", review["needs_expansion"])
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator

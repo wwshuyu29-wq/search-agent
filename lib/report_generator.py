@@ -349,15 +349,18 @@ class ReportGenerator:
                     f"[待扩写] 本节需要完成：{section_contract.get('purpose', '')}。"
                     f" 当前证据槽位：{', '.join(claim_ids) or '[待补证据]'}。"
                 )
+            actual_word_count = len("".join(paragraphs).replace(" ", ""))
+            word_budget = section_contract.get("word_budget", 600)
             draft_section = {
                 "section_id": section_contract.get("section_id"),
                 "heading": heading,
                 "purpose": section_contract.get("purpose", ""),
-                "purpose_addressed": bool(section_claims),
+                "purpose_addressed": bool(section_claims) and bool(section_contract.get("purpose")),
                 "claim_ids": [claim.get("claim_id") for claim in section_claims],
-                "word_budget": section_contract.get("word_budget", 600),
+                "word_budget": word_budget,
                 "content": "\n\n".join(paragraphs),
-                "actual_word_count": len("".join(paragraphs).replace(" ", "")),
+                "actual_word_count": actual_word_count,
+                "budget_variance": actual_word_count - word_budget,
             }
             draft_sections.append(draft_section)
             markdown_parts.extend([f"## {heading}", "", draft_section["content"], ""])

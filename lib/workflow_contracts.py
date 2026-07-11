@@ -9,6 +9,7 @@ future orchestrators share the same mental model.
 
 from copy import deepcopy
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Optional
 
 
@@ -2848,17 +2849,28 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
     actual = [section.get("heading") for section in report_draft.get("sections", [])]
     missing = [heading for heading in expected if heading not in actual]
     unexpected = [heading for heading in actual if heading not in expected]
-    purpose_gaps = [
-        section.get("heading")
-        for section in report_draft.get("sections", [])
-        if not section.get("purpose_addressed", False)
-    ]
-    evidence_gaps = [
-        section.get("heading")
-        for section in report_draft.get("sections", [])
-        if not section.get("claim_ids")
-    ]
-    passed = not missing and not unexpected and actual == expected and not purpose_gaps
+    expected_by_heading = {section.get("heading"): section for section in approved_outline.get("sections", [])}
+    purpose_gaps, evidence_gaps, missing_required_claim_ids, needs_expansion = [], [], [], []
+    for section in report_draft.get("sections", []):
+        heading = section.get("heading")
+        contract = expected_by_heading.get(heading, {})
+        content = str(section.get("content", ""))
+        purpose = str(contract.get("purpose", ""))
+        purpose_terms = [term.lower() for term in re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]{2,}", purpose)]
+        purpose_present = bool(purpose_terms) and any(term in content.lower() for term in purpose_terms)
+        if not section.get("purpose_addressed", False) or not purpose_present:
+            purpose_gaps.append(heading)
+        used_claims = set(section.get("claim_ids", []))
+        required_claims = set(contract.get("required_claim_ids", []))
+        absent = sorted(required_claims - used_claims)
+        missing_required_claim_ids.extend(absent)
+        if not used_claims or absent:
+            evidence_gaps.append(heading)
+        budget = int(contract.get("word_budget", section.get("word_budget", 0)) or 0)
+        actual_count = int(section.get("actual_word_count", len(content.replace(" ", ""))) or 0)
+        if budget and actual_count < max(1, int(budget * 0.10)):
+            needs_expansion.append(heading)
+    passed = not missing and not unexpected and actual == expected and not purpose_gaps and not evidence_gaps and not needs_expansion
     return {
         "status": "passed" if passed else "blocked",
         "missing_sections": missing,
@@ -2866,6 +2878,8 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
         "order_matches": actual == expected,
         "purpose_gaps": purpose_gaps,
         "evidence_gaps": evidence_gaps,
+        "missing_required_claim_ids": missing_required_claim_ids,
+        "needs_expansion": needs_expansion,
     }
 
 
