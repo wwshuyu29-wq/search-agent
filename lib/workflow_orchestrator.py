@@ -4,6 +4,7 @@
 
 from copy import deepcopy
 from datetime import datetime
+from difflib import SequenceMatcher
 import hashlib
 import re
 from typing import Any, Callable, Dict, List, Optional
@@ -468,8 +469,10 @@ class WorkflowOrchestrator:
         changed_confidence = self._changed_tokens(before, after, r"(?:置信度|confidence)\s*[：:]?\s*(?:高|中|低|high|medium|low)")
         risk_pattern = r"[^。.!?]*(?:风险|不确定|限制|risk|uncertain|limit)[^。.!?]*[。.!?]?"
         risk_boundary_changes = self._changed_tokens(before, after, risk_pattern)
-        before_sentences = set(self._sentences(before))
-        new_factual_sentences = [sentence for sentence in self._sentences(after) if sentence not in before_sentences and self._looks_factual(sentence)]
+        before_sentences = self._substantive_sentences(before)
+        after_sentences = self._substantive_sentences(after)
+        sentence_mappings, new_unapproved_sentences = self._map_humanized_sentences(before_sentences, after_sentences)
+        new_factual_sentences = list(new_unapproved_sentences)
         before_headings = re.findall(r"^## (.+)$", before, re.M)
         after_headings = re.findall(r"^## (.+)$", after, re.M)
         expected_headings = [section.get("heading") for section in (approved_outline or {}).get("sections", [])]
@@ -485,7 +488,7 @@ class WorkflowOrchestrator:
             log_violations.append("style_only must be true")
         if humanizer_change_log is not None and log.get("unchanged_fact_confirmation") is not True:
             log_violations.append("unchanged_fact_confirmation must be true")
-        failures = changed_numbers or changed_dates or changed_source_ids or changed_claim_ids or changed_confidence or risk_boundary_changes or new_factual_sentences or structure_changes or deleted_evidence_spans or changed_polarity or assumption_caveat_changes or log_violations
+        failures = changed_numbers or changed_dates or changed_source_ids or changed_claim_ids or changed_confidence or risk_boundary_changes or new_unapproved_sentences or structure_changes or deleted_evidence_spans or changed_polarity or assumption_caveat_changes or log_violations
         return {
             "status": "failed" if failures else "passed",
             "changed_numbers": changed_numbers,
@@ -495,6 +498,8 @@ class WorkflowOrchestrator:
             "changed_confidence": changed_confidence,
             "risk_boundary_changes": risk_boundary_changes,
             "new_factual_sentences": new_factual_sentences,
+            "new_unapproved_sentences": new_unapproved_sentences,
+            "sentence_mappings": sentence_mappings,
             "structure_changes": structure_changes,
             "deleted_evidence_spans": deleted_evidence_spans,
             "changed_polarity": changed_polarity,
@@ -505,8 +510,37 @@ class WorkflowOrchestrator:
     def _sentences(self, text: str) -> List[str]:
         return [part.strip() for part in re.split(r"(?<=[。.!?])\s*|\n+", text) if part.strip()]
 
-    def _looks_factual(self, sentence: str) -> bool:
-        return bool(re.search(r"\d|来源|发布|增长|下降|达到|收入|份额|\b(?:is|was|grew|fell|reached)\b", sentence, re.I))
+    def _substantive_sentences(self, text: str) -> List[str]:
+        return [sentence for sentence in self._sentences(text) if not re.match(r"^#{1,6}\s+", sentence)]
+
+    def _map_humanized_sentences(self, before: List[str], after: List[str]):
+        """Conservatively require one-to-one sentence rewrites; additions are blocked."""
+        mappings = []
+        unapproved = []
+        if len(after) != len(before):
+            if len(after) > len(before):
+                unapproved.extend(after[len(before):])
+            else:
+                unapproved.append("<deleted sentence>")
+        for index, after_sentence in enumerate(after[:len(before)]):
+            before_sentence = before[index]
+            before_core = self._style_normalized_sentence(before_sentence)
+            after_core = self._style_normalized_sentence(after_sentence)
+            anchors_match = self._sentence_anchors(before_sentence) == self._sentence_anchors(after_sentence)
+            similarity = SequenceMatcher(None, before_core, after_core).ratio()
+            approved = anchors_match and (before_core == after_core or similarity >= 0.72)
+            mappings.append({"before": before_sentence, "after": after_sentence, "approved": approved})
+            if not approved:
+                unapproved.append(after_sentence)
+        return mappings, unapproved
+
+    def _style_normalized_sentence(self, sentence: str) -> str:
+        text = re.sub(r"^[\s]*(?:所以|因此|因而|于是|同时|此外|不过|然而)[，,：:]?\s*", "", sentence, flags=re.I)
+        return re.sub(r"[\s，,。.!！？?；;：:]", "", text).lower()
+
+    def _sentence_anchors(self, sentence: str):
+        pattern = r"\b(?:OFF|MED|RSS|NEWS|UGC|FIN|MKT)\d{3}\b|\bCLM?\d{3}\b|https?://[^\s)]+|\d+(?:\.\d+)?"
+        return re.findall(pattern, sentence, re.I)
 
     def _canonical_url(self, url: str) -> str:
         if not url:

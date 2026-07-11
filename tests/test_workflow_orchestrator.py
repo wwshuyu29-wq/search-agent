@@ -599,6 +599,28 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertEqual(tampered["status"], "blocked")
         self.assertEqual(tampered["artifacts"]["IntegrityDiff"]["status"], "failed")
 
+    def test_integrity_blocks_new_unapproved_strategic_sentence_without_keywords(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n现有渠道覆盖核心用户。建立壁垒。\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "failed")
+        self.assertEqual(integrity["new_unapproved_sentences"], ["建立壁垒。"])
+
+    def test_integrity_allows_punctuation_and_connective_style_edits(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        draft = {"markdown": "# 报告\n\n## 结论\n\n所以，现有渠道覆盖核心用户。\n"}
+        final = {"markdown": "# 报告\n\n## 结论\n\n因此，现有渠道覆盖核心用户！\n"}
+
+        integrity = WorkflowOrchestrator().build_integrity_diff(draft, final)
+
+        self.assertEqual(integrity["status"], "passed")
+        self.assertEqual(integrity["new_unapproved_sentences"], [])
+
     def test_integrity_blocks_polarity_flip_and_deleted_outline_section(self):
         from workflow_orchestrator import WorkflowOrchestrator
 

@@ -890,6 +890,8 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "changed_confidence",
             "risk_boundary_changes",
             "new_factual_sentences",
+            "new_unapproved_sentences",
+            "sentence_mappings",
         ],
         "quality_rules": [
             "status is passed only when evidence-bearing content is unchanged.",
