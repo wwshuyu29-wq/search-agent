@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "vendors": [
+    {"id":"marketing","repository":"https://github.com/coreyhaines31/marketingskills.git","revision":"vendored-snapshot-2026-07-11","path":"vendor/marketing","license":"MIT","sync_policy":"manual-review"},
+    {"id":"finance","repository":"https://github.com/himself65/finance-skills.git","revision":"vendored-snapshot-2026-07-11","path":"vendor/finance","license":"MIT","sync_policy":"manual-review"}
+  ]
+}
