@@ -33,6 +33,15 @@ class SpecialistRegistryTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.registry.get_specialist("not-curated")
 
+    def test_prompts_are_internal_resources_with_contract_headings(self):
+        for item in self.registry.list_specialists():
+            text = self.registry.resolve_prompt(item["id"]).read_text(encoding="utf-8")
+            self.assertFalse(text.startswith("---"))
+            self.assertNotIn("\nname:", text)
+            self.assertNotIn("\ndescription:", text)
+            for heading in ("## Purpose", "## Accepted Inputs", "## Permitted Outputs", "## Evidence Role", "## Forbidden Behavior"):
+                self.assertIn(heading, text)
+
     def test_rejects_malformed_catalog(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
