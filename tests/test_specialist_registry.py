@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,6 +42,24 @@ class SpecialistRegistryTest(unittest.TestCase):
             self.assertNotIn("\ndescription:", text)
             for heading in ("## Purpose", "## Accepted Inputs", "## Permitted Outputs", "## Evidence Role", "## Forbidden Behavior"):
                 self.assertIn(heading, text)
+
+    def test_rejects_tampered_vendor_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            shutil.copytree(ROOT, root)
+            upstream = root / self.registry.get_specialist("pricing")["upstream_path"]
+            upstream.write_text(upstream.read_text(encoding="utf-8") + "\ntampered\n", encoding="utf-8")
+            with self.assertRaises(CatalogError):
+                SpecialistRegistry(root)
+
+    def test_rejects_tampered_unlisted_vendor_file_via_tree_checksum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            shutil.copytree(ROOT, root)
+            readme = root / "vendor/marketing/README.md"
+            readme.write_text(readme.read_text(encoding="utf-8") + "\ntampered\n", encoding="utf-8")
+            with self.assertRaises(CatalogError):
+                SpecialistRegistry(root)
 
     def test_rejects_malformed_catalog(self):
         with tempfile.TemporaryDirectory() as tmp:

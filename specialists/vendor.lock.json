@@ -1,7 +1,43 @@
 {
-  "version": 1,
+  "version": 2,
   "vendors": [
-    {"id":"marketing","repository":"https://github.com/coreyhaines31/marketingskills.git","revision":"vendored-snapshot-2026-07-11","path":"vendor/marketing","license":"MIT","sync_policy":"manual-review"},
-    {"id":"finance","repository":"https://github.com/himself65/finance-skills.git","revision":"vendored-snapshot-2026-07-11","path":"vendor/finance","license":"MIT","sync_policy":"manual-review"}
+    {
+      "id": "finance",
+      "repository": "https://github.com/himself65/finance-skills.git",
+      "revision": "immutable local snapshot",
+      "path": "vendor/finance",
+      "tree_sha256": "cf290ca371519a7975573b00a611da95e9368b95817cfa712c837ee471cd71ec",
+      "files": {
+        "vendor/finance/plugins/data-providers/skills/funda-data/SKILL.md": "07ccc30a21e69a5b398c71e915bb2f90391d0d7f66ac5ac915491e86ddaece99",
+        "vendor/finance/plugins/market-analysis/skills/company-valuation/SKILL.md": "f11f5ce2d8022675c90757254e97fba9cb8e32b3d6f1f1d336c96abd91210c3d",
+        "vendor/finance/plugins/market-analysis/skills/earnings-preview/SKILL.md": "079bcff7698f92dbe24976892f5ffbcb82281b18f0414a9943f54e6754e23066",
+        "vendor/finance/plugins/market-analysis/skills/earnings-recap/SKILL.md": "1c93ceccdb4b8a7ab24406148f03c5b8ad66117150b179c90a9a16e48d300a9c",
+        "vendor/finance/plugins/market-analysis/skills/estimate-analysis/SKILL.md": "dc35c2a4b7f8c413604f9bb6a458a3cf69bae4c250272c0262049c125bef7707",
+        "vendor/finance/plugins/market-analysis/skills/stock-liquidity/SKILL.md": "e66aeab4a8f12f00a3a79b699aa2fc1877705b54cbaf562b59bf49ad267da15d",
+        "vendor/finance/plugins/market-analysis/skills/yfinance-data/SKILL.md": "c96071686edb9a6ccd964cf4d9a82e7a962a47983afa66b21acdd0a6f265990b",
+        "vendor/finance/plugins/startup-tools/skills/startup-analysis/SKILL.md": "71b7b2ec563d9b530c032324138056f50cb6bc680b0fa8a8a8a579d9af2459f7"
+      },
+      "license": "MIT",
+      "sync_policy": "manual-review"
+    },
+    {
+      "id": "marketing",
+      "repository": "https://github.com/coreyhaines31/marketingskills.git",
+      "revision": "immutable local snapshot",
+      "path": "vendor/marketing",
+      "tree_sha256": "e7a0716f6142678dc3a865b3c96f77a3a7a0c11a225b09565e03f22b736009e0",
+      "files": {
+        "vendor/marketing/skills/ab-testing/SKILL.md": "1fd229160f6014f3f2d7c92cc7d2f991fbf8dc9ed68aac9793c71b408a6d1144",
+        "vendor/marketing/skills/analytics/SKILL.md": "16aab197f87bf6e2599d179061f1947d96acafe0a340837432d8ab96d2f8c55a",
+        "vendor/marketing/skills/competitor-profiling/SKILL.md": "ea7b5b7feb79ead8df038653c33aae96d38890784018a2b0afae9b2a1e21b3af",
+        "vendor/marketing/skills/customer-research/SKILL.md": "933146dd575e7bd3da0201056d5d7bd26e036ba4cfda797d3f68956d5eeacaa7",
+        "vendor/marketing/skills/marketing-ideas/SKILL.md": "7fe1f79d008129c359f28ec733837693567a11f54bd578e1fd0d178ac69bbb8d",
+        "vendor/marketing/skills/marketing-plan/SKILL.md": "548e1bd8f31fdef3ffb8edf4f3218a8162b4ac2f04b639affe547bee6dd0cba0",
+        "vendor/marketing/skills/pricing/SKILL.md": "a5d1cfe49b80569089b3d80f29b92075cf7554cef7e3cf618ef705a348a133f0",
+        "vendor/marketing/skills/product-marketing/SKILL.md": "cbebd56731ed1883d2f481ec72477b392ee0bdf99be7fa7470b9d078ff154fcb"
+      },
+      "license": "MIT",
+      "sync_policy": "manual-review"
+    }
   ]
 }

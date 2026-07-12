@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest import mock
 from lib.specialist_executor import SpecialistRequest, execute_specialist
 from lib.specialist_router import route_specialists
 
@@ -21,5 +22,18 @@ class SpecialistExecutorTest(unittest.TestCase):
  def test_marketing_method_cannot_claim_without_sources(self):
   req=SpecialistRequest('pricing','x','decide',[],[],[],'marketing_specialist')
   with self.assertRaises(ValueError): execute_specialist(req,root=ROOT,adapters={'method_prompt':lambda r,e:{'status':'completed','claim_graph_patch':[{'claim':'fact'}]}})
+ def test_executor_rejects_specialist_at_disallowed_node(self):
+  req=SpecialistRequest('pricing','x','decide',[],[],[],'report_writer')
+  with self.assertRaises(ValueError): execute_specialist(req,root=ROOT)
+ def test_structured_data_rejects_missing_provenance(self):
+  req=SpecialistRequest('yfinance-data','x','decide',[],[{'source_id':'S1'}],[],'finance_data_hunter')
+  with mock.patch('lib.specialist_executor._dependency_ready',return_value=True):
+   with self.assertRaises(ValueError): execute_specialist(req,root=ROOT,adapters={'yfinance':lambda r,e:{'claim_graph_patch':[{'claim':'revenue','source_ids':['S1']}]}})
+ def test_structured_data_accepts_complete_provenance(self):
+  req=SpecialistRequest('yfinance-data','x','decide',[],[{'source_id':'S1'}],[],'finance_data_hunter')
+  patch={'claim':'revenue','provider':'yfinance','retrieved_at':'2026-07-12T00:00:00Z','period':'FY2025','currency':'USD','metric_definition':'GAAP revenue','source_url':'https://example.com','source_ids':['S1']}
+  with mock.patch('lib.specialist_executor._dependency_ready',return_value=True):
+   result=execute_specialist(req,root=ROOT,adapters={'yfinance':lambda r,e:{'claim_graph_patch':[patch]}})
+  self.assertEqual(result.claim_graph_patch,[patch])
 
 if __name__=='__main__': unittest.main()

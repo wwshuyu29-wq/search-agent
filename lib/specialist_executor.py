@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 from .specialist_registry import SpecialistRegistry
+from .specialist_router import is_specialist_allowed_at_node
 
 STATUSES={"completed","partial","setup_required","blocked"}
 FORBIDDEN={"ReportDraft","FinalReport","report_draft","final_report"}
@@ -30,6 +31,7 @@ def _dependency_ready(dep,env):
 def execute_specialist(request,adapters=None,root=None,env=None):
  if not isinstance(request,SpecialistRequest): raise ValueError("request must be SpecialistRequest")
  registry=SpecialistRegistry(Path(root or Path(__file__).resolve().parents[1])); entry=registry.get_specialist(request.specialist_id); env=dict(os.environ if env is None else env)
+ if not is_specialist_allowed_at_node(entry,request.node_id): raise ValueError(f"specialist {request.specialist_id} is not allowed at node {request.node_id}")
  missing=[d for d in entry["dependencies"] if not _dependency_ready(d,env)]
  if missing: return SpecialistResult(request.specialist_id,"setup_required",evidence_gaps=[{"missing_dependencies":missing}])
  adapter_map={"method_prompt":_method_adapter,"yfinance":_method_adapter,"funda":_method_adapter}; adapter_map.update(adapters or {})
@@ -39,7 +41,14 @@ def execute_specialist(request,adapters=None,root=None,env=None):
  status=payload.get("status","completed")
  if status not in STATUSES: raise ValueError("invalid specialist status")
  patches=payload.get("claim_graph_patch",[])
- if entry["evidence_role"]=="method_reference":
-  for patch in patches:
-   if not patch.get("source_ids"): raise ValueError("marketing/method claims require source_ids and Citation Audit")
+ allowed_source_ids={item.get("source_id") or item.get("id") for item in request.clean_sources+request.approved_claims}
+ allowed_source_ids.discard(None)
+ for patch in patches:
+  source_ids=patch.get("source_ids")
+  if not isinstance(source_ids,list) or not source_ids: raise ValueError("claims require source_ids and Citation Audit")
+  if not set(source_ids).issubset(allowed_source_ids): raise ValueError("claim source_ids must reference approved request evidence")
+  if entry["evidence_role"]=="structured_data":
+   required={"provider","retrieved_at","period","currency","metric_definition","source_url","source_ids"}
+   missing=[field for field in sorted(required) if patch.get(field) in (None,"")]
+   if missing: raise ValueError(f"structured_data claim missing provenance: {missing}")
  return SpecialistResult(request.specialist_id,status,payload.get("notes",[]),patches,payload.get("evidence_gaps",[]),payload.get("search_plan_patch",[]),payload.get("method_references",[]))

@@ -13,6 +13,7 @@ cp -R "$CURRENT_DIR" "$DEST"
 rm -rf "$DEST/.git" "$DEST/install.sh" "$DEST/uninstall.sh" "$DEST/output" "$DEST/.venv"
 find "$DEST" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$DEST" -name '*.pyc' -delete 2>/dev/null || true
+find "$DEST" -type f -name SKILL.md ! -path "$DEST/SKILL.md" -exec sh -c 'for path do mv "$path" "${path%SKILL.md}upstream-skill.md"; done' sh {} +
 if [ "${SKIP_PYTHON_BOOTSTRAP:-0}" != "1" ]; then
   "$DEST/scripts/bootstrap_python311.sh" || echo "WARN: Python 环境未创建，请参考 USAGE.md" >&2
 fi
