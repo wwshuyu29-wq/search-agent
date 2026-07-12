@@ -1,4 +1,7 @@
+import json
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -185,6 +188,29 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("# Skill Adapter Matrix", adapter_markdown)
         self.assertIn("### onboarding", adapter_markdown)
         self.assertIn("why_use", adapter_markdown)
+
+    def test_select_skill_adapters_propagates_tampered_vendor_lock(self):
+        from workflow_contracts import select_skill_adapters
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            shutil.copytree(REPO_ROOT, root)
+            lock_path = root / "specialists/vendor.lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["vendors"][0]["tree_sha256"] = "0" * 64
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "vendor tree checksum mismatch"):
+                select_skill_adapters("pricing", domain="marketing", node_id="marketing_intelligence_hunter", repo_root=root)
+
+    def test_select_skill_adapters_returns_no_wrong_node_defaults(self):
+        from workflow_contracts import select_skill_adapters
+
+        selected = select_skill_adapters(
+            "unmatched request",
+            domain="marketing",
+            node_id="finance_data_hunter",
+        )
+        self.assertEqual(selected, [])
 
     def test_rss_relevance_threshold_contract_explains_0_6_as_fetch_gate(self):
         from workflow_contracts import get_rss_relevance_contract

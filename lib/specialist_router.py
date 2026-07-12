@@ -31,6 +31,7 @@ def route_specialists(query, node_id, domain=None, limit=3, root=None):
         for default_id in ("marketing-plan", "marketing-ideas"):
             if default_id not in existing:
                 item = registry.get_specialist(default_id)
-                ranked.append((0, item["id"], item))
+                if is_specialist_allowed_at_node(item, node_id):
+                    ranked.append((0, item["id"], item))
     ranked.sort(key=lambda row: (-row[0], row[1]))
     return [item for _, _, item in ranked[:max(0, limit)]]

@@ -2,22 +2,16 @@
 """Deterministically lock the curated vendor snapshot."""
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from lib.specialist_registry import vendor_tree_sha256
 
 
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def tree_sha256(root):
-    digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
-        digest.update(path.relative_to(root).as_posix().encode())
-        digest.update(b"\0")
-        digest.update(bytes.fromhex(sha256(path)))
-    return digest.hexdigest()
 
 
 def build_lock(root=ROOT):
@@ -39,7 +33,7 @@ def build_lock(root=ROOT):
             "repository": repositories[vendor_id],
             "revision": "immutable local snapshot",
             "path": f"vendor/{vendor_id}",
-            "tree_sha256": tree_sha256(vendor_root),
+            "tree_sha256": vendor_tree_sha256(vendor_root),
             "files": dict(sorted(files.items())),
             "license": "MIT",
             "sync_policy": "manual-review",

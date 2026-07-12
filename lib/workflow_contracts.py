@@ -2587,11 +2587,12 @@ def select_skill_adapters(
     domain: str = "",
     node_id: str = "",
     limit: int = 8,
+    repo_root: Any = None,
 ) -> List[Dict[str, Any]]:
     """Select curated internal specialists while preserving the legacy row shape."""
     try:
-        from lib.specialist_router import route_specialists
-        routed = route_specialists(query, node_id, domain or None, limit, Path(__file__).resolve().parents[1])
+        from lib.specialist_router import is_specialist_allowed_at_node, route_specialists
+        routed = route_specialists(query, node_id, domain or None, limit, repo_root or Path(__file__).resolve().parents[1])
         if routed:
             return [{
                 "skill": item["id"], "nodes": item["nodes"], "trigger_terms": item["trigger_terms"],
@@ -2603,13 +2604,16 @@ def select_skill_adapters(
                 "output_artifact": "SpecialistNotes / SearchPlanPatch / ClaimGraphPatch",
                 "use_well": "Preserve Source QA, Citation Audit, and human gates.",
             } for item in routed]
-    except (ImportError, OSError, ValueError):
-        pass
+    except ImportError:
+        from specialist_router import is_specialist_allowed_at_node
     query_l = (query or "").lower()
     candidates: List[Dict[str, Any]] = []
     domains = [domain] if domain else list(SKILL_ADAPTER_MATRIX.keys())
     for current_domain in domains:
         for adapter in SKILL_ADAPTER_MATRIX.get(current_domain, []):
+            fallback_entry = {**adapter, "domain": current_domain}
+            if not is_specialist_allowed_at_node(fallback_entry, node_id):
+                continue
             trigger_score = 0
             for term in adapter.get("trigger_terms", []):
                 term_l = str(term).lower()

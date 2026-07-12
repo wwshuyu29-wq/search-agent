@@ -1,4 +1,4 @@
-import os, subprocess, tempfile, unittest
+import importlib, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class SingleSkillInstallTest(unittest.TestCase):
@@ -13,6 +13,18 @@ class SingleSkillInstallTest(unittest.TestCase):
    installed_skills = sorted((target/'search-agent').glob('**/SKILL.md'))
    self.assertEqual(installed_skills, [target/'search-agent/SKILL.md'])
    self.assertTrue((target/'search-agent/vendor/marketing/skills/pricing/upstream-skill.md').is_file())
+   installed_root=target/'search-agent'; sys.path.insert(0,str(installed_root.parent))
+   try:
+    registry_module=importlib.import_module('search-agent.lib.specialist_registry')
+    router_module=importlib.import_module('search-agent.lib.specialist_router')
+    registry=registry_module.SpecialistRegistry(installed_root)
+    self.assertEqual(len(registry.list_specialists()),16)
+    self.assertTrue(router_module.route_specialists('pricing strategy','marketing_intelligence_hunter','marketing',1,installed_root))
+   finally:
+    sys.path.remove(str(installed_root.parent))
+    for name in list(sys.modules):
+     if name == 'search-agent' or name.startswith('search-agent.'):
+      sys.modules.pop(name,None)
    self.assertFalse((target/'marketing').exists()); self.assertFalse((target/'finance').exists())
    self.assertTrue(unrelated.is_dir()); self.assertEqual(rc.read_text(),'KEEP\n')
 if __name__=='__main__': unittest.main()

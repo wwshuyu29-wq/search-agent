@@ -9,6 +9,24 @@ class CatalogError(ValueError):
     """Raised when the internal specialist catalog violates its contract."""
 
 
+def normalized_vendor_relative_path(path):
+    """Return the canonical source-tree path for release-renamed skill files."""
+    relative = Path(path)
+    if relative.name == "upstream-skill.md":
+        relative = relative.with_name("SKILL.md")
+    return relative.as_posix()
+
+
+def vendor_tree_sha256(root):
+    """Hash a vendor tree using canonical source paths and unchanged contents."""
+    digest = hashlib.sha256()
+    for item in sorted((path for path in Path(root).rglob("*") if path.is_file()), key=lambda path: normalized_vendor_relative_path(path.relative_to(root))):
+        digest.update(normalized_vendor_relative_path(item.relative_to(root)).encode())
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(item.read_bytes()).digest())
+    return digest.hexdigest()
+
+
 class SpecialistRegistry:
     REQUIRED = {"id", "domain", "nodes", "trigger_terms", "evidence_role", "adapter", "prompt_path", "dependencies", "upstream_path"}
     ROLES = {"method_reference", "structured_data"}
@@ -54,12 +72,7 @@ class SpecialistRegistry:
             vendor_root = (self.root / vendor.get("path", "")).resolve()
             if self.root not in vendor_root.parents or not vendor_root.is_dir():
                 raise CatalogError(f"invalid vendor path: {vendor.get('id')}")
-            digest = hashlib.sha256()
-            for item in sorted(path for path in vendor_root.rglob("*") if path.is_file()):
-                digest.update(item.relative_to(vendor_root).as_posix().encode())
-                digest.update(b"\0")
-                digest.update(hashlib.sha256(item.read_bytes()).digest())
-            if digest.hexdigest() != vendor["tree_sha256"]:
+            if vendor_tree_sha256(vendor_root) != vendor["tree_sha256"]:
                 raise CatalogError(f"vendor tree checksum mismatch: {vendor.get('id')}")
             files.update(vendor["files"])
         return files
