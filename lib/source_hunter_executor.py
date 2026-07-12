@@ -278,9 +278,8 @@ class SourceHunterExecutor:
 
         results = []
         for spec in selected[:limit]:
-            path = self.repo_root / "vendor" / "marketing" / "skills" / spec["skill"] / "SKILL.md"
-            if not path.exists():
-                continue
+            from specialist_registry import SpecialistRegistry
+            path = SpecialistRegistry(self.repo_root).resolve_prompt(spec["skill"])
             summary = (
                 f"why_use: {spec['why_use']} "
                 f"how_to_use: {spec['how_to_use']} "
@@ -314,11 +313,17 @@ class SourceHunterExecutor:
         selected_skills = {spec["skill"] for spec in selected}
         results = []
 
+        if "funda-data" in selected_skills:
+            spec = next(item for item in selected if item["skill"] == "funda-data")
+            results.append(self._funda_setup_result(spec))
+            if not self.env.get("FUNDA_API_KEY") or len(results) >= limit:
+                return results[:limit]
+
         for spec in selected:
             if spec["skill"] == "yc-reader":
                 results.extend(self._yc_reader_runner(query, limit=limit))
             elif spec["skill"] == "funda-data":
-                results.append(self._funda_setup_result(spec))
+                continue
             elif spec["skill"] == "twitter-reader":
                 results.extend(self._twitter_reader_runner(query, limit=limit, spec=spec))
             elif spec["skill"] == "opencli-reader":
@@ -709,9 +714,11 @@ class SourceHunterExecutor:
         return False
 
     def _finance_skill_path(self, skill: str) -> Optional[Path]:
-        root = self.repo_root / "vendor" / "finance" / "plugins"
-        matches = list(root.glob(f"*/skills/{skill}/SKILL.md"))
-        return matches[0] if matches else None
+        try:
+            from specialist_registry import SpecialistRegistry
+            return SpecialistRegistry(self.repo_root).resolve_prompt(skill)
+        except (KeyError, ValueError):
+            return None
 
     def _retrieval_tool_for(self, source_type: str) -> str:
         return {

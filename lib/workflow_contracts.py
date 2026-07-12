@@ -2588,7 +2588,23 @@ def select_skill_adapters(
     node_id: str = "",
     limit: int = 8,
 ) -> List[Dict[str, Any]]:
-    """Select fine-grained skill adapters for a query and optional node."""
+    """Select curated internal specialists while preserving the legacy row shape."""
+    try:
+        from lib.specialist_router import route_specialists
+        routed = route_specialists(query, node_id, domain or None, limit, Path(__file__).resolve().parents[1])
+        if routed:
+            return [{
+                "skill": item["id"], "nodes": item["nodes"], "trigger_terms": item["trigger_terms"],
+                "evidence_role": item["evidence_role"], "adapter": item["adapter"],
+                "prompt_path": item["prompt_path"], "domain": item["domain"],
+                "selection_score": sum(3 for term in item["trigger_terms"] if str(term).lower() in (query or "").lower()),
+                "why_use": f"Internal curated {item['id']} specialist.",
+                "how_to_use": "Route through SpecialistExecutor and workflow artifacts.",
+                "output_artifact": "SpecialistNotes / SearchPlanPatch / ClaimGraphPatch",
+                "use_well": "Preserve Source QA, Citation Audit, and human gates.",
+            } for item in routed]
+    except (ImportError, OSError, ValueError):
+        pass
     query_l = (query or "").lower()
     candidates: List[Dict[str, Any]] = []
     domains = [domain] if domain else list(SKILL_ADAPTER_MATRIX.keys())

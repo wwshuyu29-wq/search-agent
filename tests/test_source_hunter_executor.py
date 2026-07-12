@@ -560,7 +560,8 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertEqual(first["source_type"], "marketing_intelligence")
         self.assertEqual(first["publisher"], "local marketing skill")
         self.assertEqual(first["retrieval_tool"], "marketing-skills-catalog")
-        self.assertIn("vendor/marketing/skills", first["url"])
+        self.assertIn("specialists/marketing", first["url"])
+        self.assertTrue(first["url"].endswith("prompt.md"))
         self.assertIn("method source", first["confidence_rationale"])
         self.assertIn("why_use:", first["key_facts"][0])
         self.assertIn("output_artifact:", first["key_facts"][0])
@@ -577,7 +578,7 @@ class SourceHunterExecutorTest(unittest.TestCase):
                     "task_id": "MKT-T002",
                     "assigned_hunter": "marketing_intelligence_hunter",
                     "dimension": "用户激活",
-                    "query_zh": ["百度地图 新用户 激活 onboarding aha moment"],
+                    "query_zh": ["百度地图 新用户 激活 analytics 指标 ab test 实验"],
                     "query_en": [],
                     "source_layers": ["marketing_intelligence"],
                     "expected_evidence": ["激活方法和指标"],
@@ -589,10 +590,10 @@ class SourceHunterExecutorTest(unittest.TestCase):
         fragment = executor.run_hunter("marketing_intelligence_hunter", search_plan, limit_per_query=4)
 
         self.assertEqual(fragment["execution_status"], "completed")
-        self.assertTrue(any("onboarding" in source["title"] for source in fragment["sources"]))
-        onboarding = next(source for source in fragment["sources"] if "onboarding" in source["title"])
-        self.assertIn("time-to-value", onboarding["key_facts"][0])
-        self.assertIn("method source", onboarding["confidence_rationale"])
+        self.assertTrue(any("analytics" in source["title"] for source in fragment["sources"]))
+        analytics = next(source for source in fragment["sources"] if "analytics" in source["title"])
+        self.assertIn("Internal curated analytics", analytics["key_facts"][0])
+        self.assertIn("method source", analytics["confidence_rationale"])
 
 
 if __name__ == "__main__":

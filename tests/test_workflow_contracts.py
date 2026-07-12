@@ -165,12 +165,12 @@ class WorkflowContractsTest(unittest.TestCase):
                 self.assertTrue(adapter["use_well"])
 
         selected = select_skill_adapters(
-            "百度地图 新用户 激活 onboarding 留存",
+            "百度地图 analytics 指标 ab test 实验",
             domain="marketing",
             node_id="marketing_intelligence_hunter",
             limit=5,
         )
-        self.assertEqual(selected[0]["skill"], "onboarding")
+        self.assertEqual(selected[0]["skill"], "ab-testing")
         self.assertIn("SpecialistNotes", selected[0]["output_artifact"])
 
         finance_selected = select_skill_adapters(
