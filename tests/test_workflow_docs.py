@@ -165,6 +165,11 @@ class WorkflowDocsTest(unittest.TestCase):
         self.assertIn("先输出审核卡", text)
         self.assertIn("确认后再继续", text)
 
+    def test_docs_describe_single_skill_internal_specialists_and_updates(self):
+        docs = "\n".join((REPO_ROOT / name).read_text(encoding="utf-8") for name in ["README.md", "USAGE.md", "SKILL.md", "references/external-skills.md", "references/agent-nodes.md", "references/codex-execution.md"])
+        for term in ["single top-level Skill", "internal specialists", "specialists/catalog.json", "vendor.lock.json", "git pull origin main", "Citation Audit", "T1", "T9"]:
+            self.assertIn(term, docs)
+
     def test_install_script_checks_codex_execution_reference(self):
         text = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
 

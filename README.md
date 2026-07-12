@@ -1,4 +1,10 @@
-# Search Agent Skill 3.0 — 快速开始
+# Search Agent Skill 3.0
+
+## Internal specialist architecture
+
+Installation exposes Search Agent as a **single top-level Skill**. Sixteen curated **internal specialists** are loaded through `specialists/catalog.json`; their non-discoverable `prompt.md` resources remain inside Search Agent. Full upstream snapshots stay under `vendor/`, with provenance and manual synchronization metadata in `specialists/vendor.lock.json`.
+
+Update explicitly with `git pull origin main` followed by `bash install.sh`. Internal outputs remain subject to Source QA, Citation Audit, and every T1-T9 human/evidence gate. — 快速开始
 
 一个基于 **31 个商业分析框架** 与 **多源分层搜索** 的通用调研 skill，覆盖竞品、产品、行业、用户、营销、财报与风险等场景。系统会推荐 3 套差异化大纲，由用户确认后严格按所选结构生成带可跳转引文的深度报告，不再强制所有报告套用倒金字塔。
 

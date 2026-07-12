@@ -1,5 +1,7 @@
 # 搜索调研 Agent 使用指南
 
+Search Agent installs as a **single top-level Skill**. Its 16 **internal specialists** resolve from `specialists/catalog.json`; upstream provenance is pinned in `specialists/vendor.lock.json`. Update manually with `git pull origin main` then `bash install.sh`. Specialist output still passes Citation Audit and every T1-T9 gate.
+
 **适用场景**：竞品新功能调研 / 行业趋势追踪 / 用户需求分析 / GTM 与营销策略研究
 **适用团队**：百度地图团队
 

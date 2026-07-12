@@ -1,8 +1,20 @@
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
 # 外部 Skill 增强矩阵
 
 本 skill 通过挂载两个外部 skill 仓库，在 **Step 0 → Step 1 → Step 2 → Step 3** 每个节点补齐垂直能力。核心 search-agent skill 仍是编排大脑，外部 skill 作为**可调用的专家模块**。
 
-## 上游仓库
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 上游仓库
 
 | 仓库 | 覆盖领域 | 安装位置建议 |
 |---|---|---|
@@ -43,11 +55,31 @@ python bin/search_agent.py --skill-adapter-matrix finance
 
 ---
 
-## Step 0：意图识别 & 框架路由（强制前置）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# Step 0：意图识别 & 框架路由（强制前置）
 
 Step 0 的完整节点契约见 `references/agent-nodes.md`。这里的外部 skill 不是装饰项：命中触发条件时，必须在审核卡片前调用或列为前置动作。`lib/intent_classifier.py` 只做规则/关键词分类器校验，不能替代 LLM 语义理解和专家 skill 前置探针。
 
-### 上游 skill：专家 skill 前置探针
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 上游 skill：专家 skill 前置探针
 
 在进入内置规则分类器前，先做 LLM 语义理解；若命中下表场景，先调这些 skill 辅助定框架或短路回答。
 
@@ -58,7 +90,19 @@ Step 0 的完整节点契约见 `references/agent-nodes.md`。这里的外部 sk
 | 创业/投资意图 | `finance-skills/startup-analysis` | 提供 VC 视角 / 求职视角 / 创始人视角三重维度 |
 | 单一数字快查 | `finance-skills/yfinance-data` 或 `funda-data` | 直接返回股价/财报数据，跳过完整框架流程 |
 
-### 触发规则
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 触发规则
 
 ```
 if "灵感 / 不知道 / 帮我想想" in query and 营销意图:
@@ -73,11 +117,31 @@ else:
 
 ---
 
-## Step 1：多源分层信息检索（数据源大幅扩容）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# Step 1：多源分层信息检索（数据源大幅扩容）
 
 外部 skill 在此节点**新增第 6 层"垂直数据源"**，作为传统搜索的补充。
 
-### 金融数据源（补 Layer 1-2 官方数据）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 金融数据源（补 Layer 1-2 官方数据）
 
 | 场景 | 外部 skill | 数据类型 |
 |---|---|---|
@@ -90,11 +154,35 @@ else:
 | 股票情绪 | `finance-skills/finance-sentiment` | Reddit / X / 新闻 / Polymarket |
 
 当前执行层已接入：
-- `yc-reader`：真实读取 `yc-oss` 公开 API，输出 `FIN###`。
+- `yc-reader`：真实读取 `yc-oss` 公开 API，输出 `FIN# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+#`。
 - `funda-data`：检测 `FUNDA_API_KEY` / Funda MCP 是否可用；未配置时输出 setup required，不伪造数据。
 - `twitter-reader` / `opencli-reader`：检测 `opencli` 与 Browser Bridge；未配置时输出 setup required，且保持只读边界。
 
-### 营销/竞对数据源（补 Layer 3-4 深度分析）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 营销/竞对数据源（补 Layer 3-4 深度分析）
 
 | 场景 | 外部 skill | 用途 |
 |---|---|---|
@@ -104,19 +192,75 @@ else:
 | PR/媒体池 | `marketing/public-relations` | HARO / Featured / 记者联系人 |
 | 潜在客户勘察 | `marketing/prospecting` | B2B 决策链 / 联系人挖掘 |
 
-### 调用规范
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 调用规范
 
 在 Step 1 的 YAML 源清单里，外部 skill 数据统一命名：
-- `FIN###` = finance-skills 数据源
-- `MKT###` = marketingskills 数据源
+- `FIN# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+#` = finance-skills 数据源
+- `MKT# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+#` = marketingskills 数据源
 
 保留 `confidence` 字段——垂直 skill 数据一般标 `high`（结构化 API）或 `medium`（AI 合成）。
 
 ---
 
-## Step 2：结构化分析（专家级方法论注入）
+# Internal and External Specialists
 
-### 金融框架的"专家 skill" 替换
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# Step 2：结构化分析（专家级方法论注入）
+
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 金融框架的"专家 skill" 替换
 
 当 search-agent 走到金融分析框架时，**优先调用垂直 skill 而不是纯 LLM 分析**，因为它们内置了 domain-specific 的算法与数据模型。
 
@@ -133,7 +277,19 @@ else:
 | **期权策略（新增）** | `finance-skills/options-payoff` | 交互式期权盈亏图 + 动态控制 |
 | **ETF 特化（新增）** | `finance-skills/etf-premium` | 溢价/折价 vs NAV、同类筛选 |
 
-### 营销框架的"专家 skill" 替换
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 营销框架的"专家 skill" 替换
 
 | 内置框架 | 优先调外部 skill | 增强点 |
 |---|---|---|
@@ -151,21 +307,65 @@ else:
 | **Customer Journey** | `marketing/analytics` + `marketing/ab-testing` | 埋点 + A/B 测试 |
 | **风险专项（营销侧）** | `marketing/competitors` + `marketing/competitor-profiling` | 竞对威胁监控 |
 
-### 分析师 skill：finance-skill-creator / marketingskills 的元 skill
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 分析师 skill：finance-skill-creator / marketingskills 的元 skill
 
 - `finance-skills/skill-creator`：当发现某个分析场景反复出现且无现成 skill，**动态生成新分析 skill**
 - marketingskills 无对应元 skill，但可通过 search-agent 自身的 `frameworks.md` 扩展
 
 ---
 
-## Step 3：金字塔调研报告生成（可视化 + 内容产出）
+# Internal and External Specialists
 
-### 报告可视化增强
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# Step 3：金字塔调研报告生成（可视化 + 内容产出）
+
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 报告可视化增强
 
 - `finance-skills/generative-ui`：把估值模型 / 财务比率 / 用户旅程等**输出为交互式 HTML/SVG widget**，嵌入报告（适用于 web 交付场景）
 - `finance-skills/options-payoff`：期权策略报告的必备可视化组件
 
-### 报告后续行动方案
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 报告后续行动方案
 
 Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skill：
 
@@ -187,7 +387,15 @@ Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skil
 
 ---
 
-## 全景映射表
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 全景映射表
 
 ```
 ┌─────────────────── Step 0 ───────────────────┐
@@ -233,9 +441,29 @@ Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skil
 
 ---
 
-## 完整外部 skill 清单
+# Internal and External Specialists
 
-### `himself65/finance-skills` （6 plugins / 当前发现 25 skills）
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 完整外部 skill 清单
+
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# `himself65/finance-skills` （6 plugins / 当前发现 25 skills）
 
 **data-providers**：yfinance-data · funda-data
 **market-analysis**：company-valuation · earnings-preview · earnings-recap · estimate-analysis · etf-premium · options-payoff · saas-valuation-compression · sepa-strategy · stock-correlation · stock-liquidity
@@ -244,7 +472,19 @@ Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skil
 **ui-tools**：generative-ui
 **skill-creator**：skill-creator（元 skill）
 
-### `coreyhaines31/marketingskills` （当前发现 45 skills）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# `coreyhaines31/marketingskills` （当前发现 45 skills）
 
 **转化优化 CRO**：cro · signup · onboarding · popups · paywalls
 **内容与文案**：copywriting · copy-editing · cold-email · emails · social · image · video · sms
@@ -259,7 +499,15 @@ Step 3 报告输出后，若用户问"接下来怎么做"，可衔接以下 skil
 
 ---
 
-## 触发决策树（供 Codex 使用）
+# Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+## Internal and External Specialists
+
+Search Agent is the **single top-level Skill**. Curated **internal specialists** are registered by `specialists/catalog.json`; `specialists/vendor.lock.json` pins upstream provenance. Optional external tools provide retrieval only and do not bypass Citation Audit or T1-T9 gates.
+
+# 触发决策树（供 Codex 使用）
 
 ```
 用户 query 类型？

@@ -1,8 +1,20 @@
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
 # Codex-Native Execution Model
 
 这份文档回答一个核心问题：search-agent 的多 agent workflow 在 Codex 里到底怎么调用 LLM。
 
-## LLM 调用方式
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# LLM 调用方式
 
 在 Codex 中，节点 LLM 默认由当前 Codex 会话承担。search-agent skill 不在节点内部另行隐藏调用 OpenAI API；Codex 读取节点 prompt、执行判断、调用工具、写入 artifact。
 
@@ -14,7 +26,15 @@
 - 浏览器/平台登录态：用于 OpenCLI、agent-reach、B 站等平台。
 - 可能的内部搜索权限：用于企业内网或知识库。
 
-## 节点 Prompt 从哪里来
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 节点 Prompt 从哪里来
 
 可执行节点 prompt 由 `lib/workflow_contracts.py` 生成：
 
@@ -37,7 +57,15 @@ prompt = build_agent_prompt("source_qa")
 
 Codex-native 执行时，Codex 读这个 contract，用当前会话的 LLM 完成判断；工具和 skill 只负责检索、解析、计算、结构化检查，不替代 LLM 判断。
 
-## Artifact 和 Gate
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# Artifact 和 Gate
 
 artifact schema 来自：
 
@@ -56,7 +84,15 @@ orchestrator.validate_artifact("ClaimGraph", claim_graph)
 
 这保证每个节点不是“说完就过”，而是必须产出结构化 artifact，字段齐全后才能进入下一步。
 
-## 并行策略
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 并行策略
 
 优先策略：如果当前 Codex 环境有 multi-agent/subagent 工具，Source Hunter 类节点可以并行：
 
@@ -69,7 +105,15 @@ orchestrator.validate_artifact("ClaimGraph", claim_graph)
 
 兜底策略：如果没有 multi-agent 工具，同一个 Codex 会话按同样的 node prompt 顺序执行。输出 artifact 和 gate 不变，所以结果仍然可审计。
 
-## 团队安装后怎么跑
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 团队安装后怎么跑
 
 安装目标路径：
 
@@ -113,7 +157,15 @@ python bin/search_agent.py --workflow-resume 通过 --state-file search_agent_st
 
 CLI 的 gate runner 用来验证状态流转；Codex 里的真实调研会用同一套节点契约，但 Source Hunter 阶段应替换为真实检索和工具调用结果。
 
-## 真实检索竖切
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 真实检索竖切
 
 `真实检索竖切` 的意思是：先不追求所有平台、所有子 agent 一次性全自动，而是先把一条真实链路跑到底。它必须满足四件事：
 
@@ -237,7 +289,15 @@ SourceListFragment
 
 这条链路的目的不是增加形式，而是保证 Source Hunter 的候选来源不会直接进入分析，报告也不会在 Humanizer 改写后绕过事实完整性检查。
 
-## 提示词是否必须写 sub agent
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 提示词是否必须写 sub agent
 
 不需要。团队成员正常使用时只要写 `用 search-agent`，Codex 会加载 `SKILL.md`，再按节点契约执行多 agent workflow。
 
@@ -255,7 +315,15 @@ SourceListFragment
 确认后再进入 Search Planner 和各 Source Hunter。
 ```
 
-## Codex 里真实执行顺序
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# Codex 里真实执行顺序
 
 1. 用户在 Codex 里提出调研需求，并触发 `search-agent` skill。
 2. Codex 加载 `SKILL.md`。
@@ -269,7 +337,15 @@ SourceListFragment
 10. Report Writer Agent 选择报告形态并生成 ReportDraft。
 11. Humanizer Editor Agent 必须由真实 callable/adapter 或外部改写结果执行，只做表达层去 AI 味，保留事实、数字、引用和风险边界。production 未注入 adapter 时流程停在 `pending_gate=humanizer_required`，不得以 identity copy 生成 `FinalReport`。CLI 可用 `--workflow-resume humanized --humanized-file <report.md> --change-log-file <changes.json>` 提交真实改写并继续 IntegrityDiff。
 
-## 默认不采用
+# Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+## Single-Skill installation
+
+Codex discovers one **single top-level Skill** at `~/.codex/skills/search-agent`. The 16 **internal specialists** use `specialists/catalog.json`, while `specialists/vendor.lock.json` records manually synchronized upstream snapshots. Update with `git pull origin main` and `bash install.sh`; Citation Audit and T1-T9 are unchanged.
+
+# 默认不采用
 
 - 不默认在 skill 内部为每个节点隐藏调用 OpenAI API。
 - 不让 CLI 关键词分类器替代 Codex LLM 的语义判断。

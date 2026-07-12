@@ -1,3 +1,7 @@
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
 # Agent Nodes and Decision Contracts
 
 This document defines how search-agent should think and delegate work. It is the contract future Codex runs must follow when a research request moves from Step 0 to the final report.
@@ -36,7 +40,15 @@ Every node contract must expose these fields:
 - `quality_gate`: what must be true before the pipeline can move on.
 - `hard_constraints`: what the node must not do.
 
-## Core Principle
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Core Principle
 
 `lib/intent_classifier.py` and `lib/framework_combinator.py` are not the brain. They are deterministic guardrails. The actual Step 0 decision stack is:
 
@@ -48,9 +60,29 @@ Every node contract must expose these fields:
 
 The rule classifier can never override an obvious LLM semantic read. If the LLM and keyword route disagree, the audit card must say so and explain the final recommendation.
 
-## Step 0 Decision Logic
+# Internal specialist execution
 
-### Semantic Signals Are Not Keyword Lists
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Step 0 Decision Logic
+
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Semantic Signals Are Not Keyword Lists
 
 增长类问题、单一金融数字、竞品问题、营销方案问题都不能只靠关键词判断。关键词只是**语义信号**，不是封闭枚举。LLM must judge the user's intent from the whole utterance, including verbs, implied audience, object type, expected output, and evidence need.
 
@@ -65,7 +97,19 @@ Examples:
 
 If a user avoids these exact words but clearly implies the same decision, follow the implication. If the words appear but the larger sentence points elsewhere, follow the larger sentence and mention the conflict in the audit card.
 
-### 1. LLM 语义理解层
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# 1. LLM 语义理解层
 
 Extract these fields before choosing a framework:
 
@@ -81,7 +125,19 @@ Extract these fields before choosing a framework:
 
 The LLM must translate vague user wording into a business question. For example, "高德地图上新了什么功能，汇总成方案" is not just a news search. It is a competitor tracking and response-planning task, so the default route is `同行竞争对比 + JTBD/3C` with optional `SWOT` or `4P` depending on whether the user wants actions.
 
-### 2. 专家 skill 前置探针
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# 2. 专家 skill 前置探针
 
 Use expert skills in Step 0 when they improve the framing before search:
 
@@ -95,7 +151,19 @@ Use expert skills in Step 0 when they improve the framing before search:
 
 These skills are not decorative. The audit card must list which expert skills will be used and why. If a trigger matches but the skill is unavailable, state the fallback.
 
-### 3. 规则/关键词分类器
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# 3. 规则/关键词分类器
 
 Use `lib/intent_classifier.py` after the semantic pass:
 
@@ -105,7 +173,19 @@ Use `lib/intent_classifier.py` after the semantic pass:
 
 Do not treat keyword hits as the final answer. For example, the word "方案" does not always mean marketing-plan; it may mean an internal response plan after competitor monitoring.
 
-### 4. 框架组合器
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# 4. 框架组合器
 
 Use `lib/framework_combinator.py` only after deciding the core decision. The preferred combination is the smallest one that answers the question:
 
@@ -117,9 +197,29 @@ Use `lib/framework_combinator.py` only after deciding the core decision. The pre
 
 If more than four frameworks are needed, the audit card must explain why; otherwise the run becomes broad but shallow.
 
-## Node Contracts
+# Internal specialist execution
 
-### R0 execution-layer update
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Node Contracts
+
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# R0 execution-layer update
 
 The executable contract has moved from a direct `SourceList -> Source QA -> ClaimGraph`
 path to a stricter evidence chain:
@@ -144,7 +244,19 @@ produce `SourceListFragment` rows, not final analysis-ready sources. The
 `SourceList Merger` performs deterministic dedupe/canonicalization before
 Source QA. `Integrity Diff Checker` must pass before final review.
 
-### Intent Router Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Intent Router Agent
 
 **Role**: Convert the user's message into a business decision and propose the framework path.
 
@@ -163,7 +275,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Hide uncertainty.
 - Select a framework only because a keyword matched.
 
-### Search Planner Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Search Planner Agent
 
 **Role**: Turn confirmed framework dimensions into search tasks.
 
@@ -176,7 +300,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Add expanded keyword families.
 - Mark official, media, UGC, RSS, data API, and internal sources separately.
 
-### Source Hunter Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Source Hunter Agent
 
 **Role**: Execute multi-source search and fetch raw evidence.
 
@@ -189,7 +325,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Normalize every item into `source_id / title / publisher / source_type / publish_date / url / confidence / key_facts / full_text_fetched`.
 - Keep UGC/social sources as low-confidence sentiment unless independently verified.
 
-### SourceList Merger
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# SourceList Merger
 
 **Role**: Merge SourceListFragment rows from all Source Hunter nodes without adding facts.
 
@@ -203,7 +351,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Keep original/official sources ahead of reposts or summaries.
 - Record merged source IDs and id rewrites.
 
-### Gap Filler / Conflict Refetch Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Gap Filler / Conflict Refetch Agent
 
 **Role**: Address only Source QA gaps and conflicts.
 
@@ -216,7 +376,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Avoid expanding the research scope without user confirmation.
 - Leave unresolved conflicts visible for user decision.
 
-### Integrity Diff Checker
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Integrity Diff Checker
 
 **Role**: Verify Humanizer did not change evidence-bearing content.
 
@@ -228,13 +400,37 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Compare numbers, dates, source_ids, claim_ids, confidence labels, and risk boundaries.
 - Block final review if evidence-bearing content changed.
 
-### Media Source Hunter
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Media Source Hunter
 
 **Role**: Collect and judge non-official media, deep analysis, and secondary reporting.
 
 **Input**: SearchPlan media/deep-analysis tasks.
 
-**Output**: SourceList rows with `MED###` source IDs.
+**Output**: SourceList rows with `MED# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+#` source IDs.
 
 **Must do**:
 - Use Firecrawl, Brave, Baidu, and URL full-text fetch for media and analysis pages.
@@ -245,7 +441,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Let media framing outrank official evidence for primary facts.
 - Treat a topic mention as proof of a claim.
 
-### Source QA Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Source QA Agent
 
 **Role**: Validate evidence before analysis.
 
@@ -259,7 +467,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Cross-check key numbers with at least two independent sources when possible.
 - Pause for user choice if two high-impact numbers conflict.
 
-### Framework Analyst Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Framework Analyst Agent
 
 **Role**: Analyze evidence according to the confirmed framework.
 
@@ -273,7 +493,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Use expert financial/marketing skills when the framework calls for them.
 - State "证据有限，推测如下（置信度：低）" for weakly supported interpretations.
 
-### Financial Specialist Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Financial Specialist Agent
 
 **Role**: Handle finance, valuation, market data, and financial risk.
 
@@ -284,7 +516,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Include period, currency, YoY/QoQ basis, and data source for every number.
 - Separate research from investment advice.
 
-### Marketing Specialist Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Marketing Specialist Agent
 
 **Role**: Handle positioning, customer research, GTM, growth, and brand questions.
 
@@ -295,7 +539,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Use `customer-research`, `product-marketing`, `pricing`, `competitor-profiling`, `analytics`, or related skills in Step 2 when analysis needs depth.
 - Tie recommendations to user segment, channel, funnel stage, or conversion metric.
 
-### Citation Auditor Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Citation Auditor Agent
 
 **Role**: Check that claims and citations actually match.
 
@@ -309,7 +565,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Reject unsupported numbers and vague conclusions.
 - Require source replacement or wording downgrade when support is weak.
 
-### Outline Architect Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Outline Architect Agent
 
 **Role**: Turn audited claims into three materially different outline candidates.
 
@@ -323,7 +591,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Recommend one based on reader and decision, but never approve for the user.
 - Allow the user to select, combine, reorder, rename, or edit sections.
 
-### Human Outline Approval Gate
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Human Outline Approval Gate
 
 **Role**: Capture the user's final structural decision.
 
@@ -336,7 +616,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - No report prose before approved_by_user=true.
 - Confirmed top-level headings and order are immutable until re-approved.
 
-### Report Writer Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Report Writer Agent
 
 **Role**: Develop deep prose inside the user-approved outline.
 
@@ -352,7 +644,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Attach citations inline and include a complete references table.
 - Use conclusion-first only when the approved outline calls for it.
 
-### Outline Compliance Auditor Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Outline Compliance Auditor Agent
 
 **Role**: Block structural drift before Humanizer.
 
@@ -365,7 +669,19 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Check whether each section purpose and required evidence slots were addressed.
 - Return blocked status on any unapproved top-level structural change.
 
-### Humanizer Editor Agent
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Humanizer Editor Agent
 
 **Role**: Remove AI-like writing patterns after citation audit, without weakening evidence or changing the conclusion.
 
@@ -385,7 +701,15 @@ Source QA. `Integrity Diff Checker` must pass before final review.
 - Add personality that conflicts with a professional research report.
 - Turn risk language into overconfident recommendations.
 
-## Report Logic
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Report Logic
 
 The report is not a template fill. It is a compression of the audited claim graph, then a human editing pass.
 
@@ -400,7 +724,15 @@ The report is not a template fill. It is a compression of the audited claim grap
 
 If the claim graph is weak, the report must say evidence is insufficient instead of inventing a confident conclusion.
 
-## Pressure Scenarios
+# Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+## Internal specialist execution
+
+The **single top-level Skill** routes 16 **internal specialists** through `specialists/catalog.json` and the registry/router/executor. Their outputs are limited to SpecialistNotes, SearchPlanPatch, and ClaimGraphPatch; Citation Audit and T1-T9 remain mandatory.
+
+# Pressure Scenarios
 
 Use these scenarios to validate the skill:
 
