@@ -163,7 +163,15 @@ def _load_rss_fetch_module():
 
 def collect_checks(run_live=False):
     """Collect local workflow readiness checks."""
+    try:
+        sys.path.insert(0, str(REPO_ROOT))
+        from lib.specialist_registry import SpecialistRegistry
+        registry = SpecialistRegistry(REPO_ROOT)
+        registry_status = _check("internal specialist catalog", "ok", f"{len(registry.list_specialists())} curated specialists ready", True)
+    except Exception as exc:
+        registry_status = _check("internal specialist catalog", "error", str(exc), True)
     checks = [
+        registry_status,
         _python_runtime_check(required=False),
         _python311_command_check(required=False),
         _file_check("search-agent skill", REPO_ROOT / "SKILL.md"),
@@ -202,6 +210,14 @@ def collect_checks(run_live=False):
         ]
     )
     checks.append(_opencli_bridge_check(required=False))
+    skills_root = REPO_ROOT.parent
+    for name in ("marketing", "finance"):
+        stale = skills_root / name
+        checks.append(_check(
+            f"optional stale top-level {name}", "warn" if stale.exists() else "ok",
+            f"optional old installation found: {stale}; safe to remove manually" if stale.exists() else "not installed",
+            required=False,
+        ))
 
     try:
         rss_fetch = _load_rss_fetch_module()
