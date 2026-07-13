@@ -1,3 +1,5 @@
+import importlib
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -7,6 +9,16 @@ from lib.specialist_router import route_specialists
 ROOT=Path(__file__).resolve().parents[1]
 
 class SpecialistExecutorTest(unittest.TestCase):
+ def test_specialist_router_imports_as_package_and_top_level_module(self):
+  package_module=importlib.import_module('lib.specialist_router')
+  sys.path.insert(0,str(ROOT/'lib'))
+  try:
+   sys.modules.pop('specialist_router',None)
+   top_level_module=importlib.import_module('specialist_router')
+  finally:
+   sys.path.pop(0)
+  self.assertTrue(package_module.route_specialists)
+  self.assertTrue(top_level_module.route_specialists)
  def test_mixed_routing_is_deterministic(self):
   ids=[x['id'] for x in route_specialists('pricing and valuation dcf', 'finance_specialist', root=ROOT, limit=4)]
   self.assertIn('pricing',ids); self.assertIn('company-valuation',ids)

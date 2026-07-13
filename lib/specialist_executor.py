@@ -4,8 +4,12 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
-from .specialist_registry import SpecialistRegistry
-from .specialist_router import is_specialist_allowed_at_node
+try:
+ from .specialist_registry import SpecialistRegistry
+ from .specialist_router import is_specialist_allowed_at_node
+except ImportError:  # Support CLI usage with lib/ directly on sys.path.
+ from specialist_registry import SpecialistRegistry
+ from specialist_router import is_specialist_allowed_at_node
 
 STATUSES={"completed","partial","setup_required","blocked"}
 FORBIDDEN={"ReportDraft","FinalReport","report_draft","final_report"}

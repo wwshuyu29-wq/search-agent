@@ -1,6 +1,10 @@
 """Deterministic routing for curated internal specialists."""
 from pathlib import Path
-from .specialist_registry import SpecialistRegistry
+
+try:
+    from .specialist_registry import SpecialistRegistry
+except ImportError:  # Support CLI usage with lib/ directly on sys.path.
+    from specialist_registry import SpecialistRegistry
 
 
 def is_specialist_allowed_at_node(entry, node_id):

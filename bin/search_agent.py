@@ -16,6 +16,7 @@ import sys
 import os
 import json
 import argparse
+import re
 from datetime import datetime
 from typing import List, Dict
 
@@ -673,11 +674,31 @@ class SearchAgentSkill:
         """
         params = {}
 
-        # 简化实现: 使用关键词匹配
+        relation = re.search(
+            r"(?:调研|研究|分析|了解)\s*([^，,。；;]+?)的.+?(?:以及|并|同时)?(?:对|给)\s*([^，,。；;]+?)的(?:竞争)?启示",
+            user_query,
+        )
+        if relation:
+            primary = relation.group(1).strip()
+            decision_target = relation.group(2).strip()
+            params.update({
+                "主题": primary,
+                "公司名": primary,
+                "公司A": primary,
+                "公司B": decision_target,
+                "决策目标": decision_target,
+                "竞争对手": [decision_target],
+            })
+            if "地图" in primary or "导航" in primary or "地图" in decision_target:
+                params["行业"] = "地图导航"
+
+        # Fixed names remain a fallback for terse comparison queries.
         map_products = ["高德地图", "百度地图", "腾讯地图", "Apple Maps", "Google Maps", "Waze"]
         mentioned_map_products = [product for product in map_products if product in user_query]
 
-        if mentioned_map_products:
+        if "主题" in params:
+            pass
+        elif mentioned_map_products:
             primary = mentioned_map_products[0]
             params["主题"] = primary
             params["公司名"] = primary
@@ -687,6 +708,7 @@ class SearchAgentSkill:
             if competitors:
                 params["竞争对手"] = competitors
                 params["公司B"] = competitors[0]
+                params["决策目标"] = competitors[0]
         elif "高德" in user_query:
             params["主题"] = "高德地图"
             params["公司名"] = "高德地图"

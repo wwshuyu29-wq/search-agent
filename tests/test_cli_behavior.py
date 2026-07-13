@@ -176,7 +176,7 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertNotIn("SearchPlan", saved["artifacts"])
         self.assertIn("等待用户确认", printed)
 
-    def test_cli_gate_workflow_resume_confirmation_writes_final_review_state(self):
+    def test_cli_gate_workflow_resume_confirmation_writes_source_hunter_state(self):
         agent = SearchAgentSkill()
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -191,10 +191,11 @@ class CliBehaviorTest(unittest.TestCase):
             saved = json.loads(state_file.read_text(encoding="utf-8"))
             printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
 
-        self.assertEqual(state["pending_gate"], "outline_approved_by_user")
-        self.assertEqual(saved["pending_gate"], "outline_approved_by_user")
-        self.assertIn("OutlinePlan", saved["artifacts"])
-        self.assertNotIn("ReportDraft", saved["artifacts"])
+        self.assertEqual(state["pending_gate"], "source_hunters_required")
+        self.assertEqual(saved["pending_gate"], "source_hunters_required")
+        self.assertIn("SearchPlan", saved["artifacts"])
+        self.assertNotIn("SourceListFragment", saved["artifacts"])
+        self.assertNotIn("example.com", json.dumps(saved["artifacts"]["SearchPlan"], ensure_ascii=False))
 
     def test_cli_custom_outline_requires_explicit_approval_flag(self):
         agent = SearchAgentSkill()
@@ -202,7 +203,12 @@ class CliBehaviorTest(unittest.TestCase):
             state_file = Path(temp_dir) / "state.json"
             sections_file = Path(temp_dir) / "sections.json"
             state = agent.start_gate_workflow("测试", str(state_file))
-            state = __import__("workflow_orchestrator").WorkflowOrchestrator().resume_gate_workflow(state, "确认")
+            orchestrator = __import__("workflow_orchestrator").WorkflowOrchestrator()
+            state = orchestrator.resume_gate_workflow(state, "确认")
+            topic = state["artifacts"]["IntentBrief"]["research_object"]
+            source = {"source_id": "OFF001", "title": f"{topic}官方更新", "publisher": topic, "source_type": "official", "publish_date": "2026-07-10", "url": "https://official.invalid/test", "canonical_url": "https://official.invalid/test", "confidence": "high", "key_facts": [f"{topic}上线正式功能"], "full_text_fetched": True, "collected_by": "Official Source Hunter", "confidence_rationale": "primary", "evidence_boundary": "仅覆盖测试更新"}
+            state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [source]}]
+            state = orchestrator.continue_from_source_fragments(state)
             state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
             claim_id = state["artifacts"]["ApprovedClaimGraph"]["approved_claim_ids"][0]
             sections_file.write_text(json.dumps([{"section_id": "S1", "heading": "自定义", "purpose": "判断", "required_claim_ids": [claim_id], "word_budget": 100}], ensure_ascii=False), encoding="utf-8")
@@ -433,8 +439,9 @@ class CliBehaviorTest(unittest.TestCase):
             saved = json.loads(state_file.read_text(encoding="utf-8"))
             printed = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list if call.args)
 
-        self.assertEqual(continued["pending_gate"], "outline_approved_by_user")
+        self.assertEqual(continued["pending_gate"], "source_qa_conflict_resolution")
         self.assertEqual(saved["artifacts"]["RawSourceList"]["source_count"], 1)
+        self.assertGreater(saved["artifacts"]["GapList"]["blocking_gap_count"], 0)
         self.assertIn("Workflow Continued From Source Fragments", printed)
         self.assertIn("raw_sources: 1", printed)
 
@@ -463,6 +470,20 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertEqual(params["公司B"], "百度地图")
         self.assertIn("百度地图", params["竞争对手"])
         self.assertEqual(params["行业"], "地图导航")
+
+    def test_extracts_research_subject_and_decision_target_without_fixed_dictionary(self):
+        agent = SearchAgentSkill()
+
+        params = agent._extract_params_from_query(
+            "调研豆包导航的产品能力、用户场景，以及对百度地图的竞争启示"
+        )
+
+        self.assertEqual(params["主题"], "豆包导航")
+        self.assertEqual(params["公司名"], "豆包导航")
+        self.assertEqual(params["公司A"], "豆包导航")
+        self.assertEqual(params["公司B"], "百度地图")
+        self.assertEqual(params["决策目标"], "百度地图")
+        self.assertIn("百度地图", params["竞争对手"])
 
     def test_output_dir_uses_environment_override(self):
         agent = SearchAgentSkill()

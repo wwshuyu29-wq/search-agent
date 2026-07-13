@@ -9,6 +9,25 @@ sys.path.insert(0, str(REPO_ROOT / "lib"))
 
 
 class WorkflowOrchestratorTest(unittest.TestCase):
+    def _continue_with_real_source(self, orchestrator, state, subject="高德地图"):
+        if state.get("pending_gate") == "audit_card_confirmed":
+            state = orchestrator.resume_gate_workflow(state, "确认")
+        topic = state["artifacts"]["IntentBrief"]["research_object"]
+        source = {
+            "source_id": "OFF001", "title": f"{topic}官方产品更新", "publisher": topic,
+            "source_type": "official", "publish_date": "2026-07-10",
+            "url": f"https://official.invalid/{subject}", "canonical_url": f"https://official.invalid/{subject}",
+            "confidence": "high", "key_facts": [
+                f"{topic}上线车道级导航并在复杂路口提供连续路线提示，官方产品说明明确限定于已覆盖道路和当前版本。",
+                f"{topic}支持语音规划路线，官方说明覆盖驾车与步行场景，实际可用范围仍以产品页面列出的地区为准。",
+                f"{topic}本次更新面向产品体验优化，发布时间为2026年7月10日，当前证据只证明发布内容而不代表用户采用率。",
+            ],
+            "full_text_fetched": True, "collected_by": "Official Source Hunter",
+            "confidence_rationale": "official primary source", "evidence_boundary": "仅覆盖该官方产品更新",
+        }
+        state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [source]}]
+        return orchestrator.continue_from_source_fragments(state)
+
     def test_validate_artifact_accepts_complete_source_list(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
@@ -215,21 +234,29 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertNotIn("SearchPlan", state["artifacts"])
         self.assertIn("回复确认", state["next_action"])
 
-    def test_gate_driven_workflow_resumes_after_confirmation_and_waits_for_final_review(self):
+    def test_gate_driven_workflow_confirmation_builds_real_plan_and_waits_for_hunters(self):
         from workflow_orchestrator import WorkflowOrchestrator
 
         orchestrator = WorkflowOrchestrator()
-        state = orchestrator.start_gate_workflow(
-            "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
-        )
+        with patch.object(orchestrator, "_build_dry_step0", side_effect=AssertionError("dry step0 called")), \
+             patch.object(orchestrator, "_build_dry_search_plan", side_effect=AssertionError("dry plan called")), \
+             patch.object(orchestrator, "_build_dry_source_list", side_effect=AssertionError("dry source called")):
+            state = orchestrator.start_gate_workflow(
+                "调研豆包导航的产品能力、用户场景，以及对百度地图的竞争启示"
+            )
+            resumed = orchestrator.resume_gate_workflow(state, "确认")
 
-        resumed = orchestrator.resume_gate_workflow(state, "确认")
-
-        self.assertEqual(resumed["status"], "waiting_for_user")
-        self.assertEqual(resumed["pending_gate"], "outline_approved_by_user")
-        self.assertEqual(resumed["current_phase"], "step3_outline_approval")
-        self.assertIn("OutlinePlan", resumed["artifacts"])
-        self.assertNotIn("ReportDraft", resumed["artifacts"])
+        self.assertEqual(state["artifacts"]["IntentBrief"]["research_object"], "豆包导航")
+        self.assertEqual(state["artifacts"]["IntentBrief"]["decision_target"], "百度地图")
+        self.assertEqual(resumed["status"], "ready_for_execution")
+        self.assertEqual(resumed["pending_gate"], "source_hunters_required")
+        self.assertEqual(resumed["current_phase"], "step1_parallel_source_hunting")
+        self.assertIn("SearchPlan", resumed["artifacts"])
+        serialized = str(resumed["artifacts"]["SearchPlan"])
+        self.assertIn("豆包导航", serialized)
+        self.assertNotIn("example.com", serialized)
+        self.assertNotIn("SourceListFragment", resumed["artifacts"])
+        self.assertNotIn("OutlinePlan", resumed["artifacts"])
 
     def test_gate_driven_workflow_records_revision_request_instead_of_advancing(self):
         from workflow_orchestrator import WorkflowOrchestrator
@@ -256,7 +283,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         state = orchestrator.start_gate_workflow(
             "高德地图最近三个月上了什么新功能，对百度地图市场组有什么启示"
         )
-        waiting_outline = orchestrator.resume_gate_workflow(state, "确认")
+        waiting_outline = self._continue_with_real_source(orchestrator, state)
         waiting_final = orchestrator.resume_gate_workflow(waiting_outline, {"selection": "A"})
 
         completed = orchestrator.resume_gate_workflow(waiting_final, "通过")
@@ -296,15 +323,17 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             "source_quality_notes": ["存在数字冲突，暂停等待用户选口径。"],
         }
 
+        state = orchestrator.resume_gate_workflow(state, "确认")
+        state["artifacts"]["SourceListFragment"] = orchestrator._build_source_fragments(source_list)
         with patch.object(orchestrator, "source_qa", return_value=(conflict_notes, clean_source_list)):
-            resumed = orchestrator.resume_gate_workflow(state, "确认")
+            resumed = orchestrator.continue_from_source_fragments(state)
 
         self.assertEqual(resumed["status"], "waiting_for_user")
         self.assertEqual(resumed["pending_gate"], "source_qa_conflict_resolution")
         self.assertEqual(resumed["current_phase"], "step1_source_qa")
         self.assertIn("SourceQANotes", resumed["artifacts"])
         self.assertNotIn("ClaimGraph", resumed["artifacts"])
-        self.assertIn("数字冲突", resumed["next_action"])
+        self.assertIn("来源冲突或缺口", resumed["next_action"])
 
     def test_source_qa_conflict_resolution_resumes_analysis_after_user_choice(self):
         from workflow_orchestrator import WorkflowOrchestrator
@@ -330,8 +359,10 @@ class WorkflowOrchestratorTest(unittest.TestCase):
             "source_quality_notes": ["存在数字冲突，暂停等待用户选口径。"],
         }
 
+        state = orchestrator.resume_gate_workflow(state, "确认")
+        state["artifacts"]["SourceListFragment"] = orchestrator._build_source_fragments(source_list)
         with patch.object(orchestrator, "source_qa", return_value=(conflict_notes, clean_source_list)):
-            waiting_conflict = orchestrator.resume_gate_workflow(state, "确认")
+            waiting_conflict = orchestrator.continue_from_source_fragments(state)
 
         resumed = orchestrator.resume_gate_workflow(waiting_conflict, "采用官方口径")
 
@@ -375,10 +406,11 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         continued = orchestrator.continue_from_source_fragments(state)
 
-        self.assertEqual(continued["pending_gate"], "outline_approved_by_user")
+        self.assertEqual(continued["pending_gate"], "source_qa_conflict_resolution")
         self.assertEqual(continued["artifacts"]["RawSourceList"]["source_count"], 1)
         self.assertIn("CleanSourceList", continued["artifacts"])
-        self.assertIn("OutlinePlan", continued["artifacts"])
+        self.assertGreater(continued["artifacts"]["GapList"]["blocking_gap_count"], 0)
+        self.assertNotIn("OutlinePlan", continued["artifacts"])
         self.assertNotIn("ReportDraft", continued["artifacts"])
 
     def test_confirmed_audit_stops_at_outline_gate_without_writing_prose(self):
@@ -387,12 +419,12 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         orchestrator = WorkflowOrchestrator()
         state = orchestrator.start_gate_workflow("高德地图新功能对百度地图的启示")
         source = {
-            "source_id": "OFF001", "title": "官方更新", "publisher": "高德",
+            "source_id": "OFF001", "title": "高德地图官方更新", "publisher": "高德",
             "source_type": "official", "publish_date": "2026-07-10",
             "url": "https://example.com/update", "canonical_url": "https://example.com/update",
-            "confidence": "high", "key_facts": ["上线车道级导航"],
+            "confidence": "high", "key_facts": ["高德地图上线车道级导航"],
             "full_text_fetched": True, "collected_by": "Official Source Hunter",
-            "confidence_rationale": "official primary source",
+            "confidence_rationale": "official primary source", "evidence_boundary": "仅覆盖官方更新",
         }
         state["artifacts"]["SearchPlan"] = orchestrator.build_search_plan(state["artifacts"]["AuditCard"])
         state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [source]}]
@@ -453,15 +485,17 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         orchestrator = WorkflowOrchestrator()
         state = orchestrator.start_gate_workflow("测试")
-        state["artifacts"]["SearchPlan"] = orchestrator.build_search_plan(state["artifacts"]["AuditCard"])
+        state = orchestrator.resume_gate_workflow(state, "确认")
+        topic = state["artifacts"]["IntentBrief"]["research_object"]
         state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [{
-            "source_id": "OFF001", "title": "来源", "publisher": "官方", "source_type": "official",
+            "source_id": "OFF001", "title": f"{topic}官方来源", "publisher": topic, "source_type": "official",
             "publish_date": "2026-07-10", "url": "https://example.com", "canonical_url": "https://example.com",
-            "confidence": "high", "key_facts": ["真实事实"], "full_text_fetched": True,
-            "collected_by": "Official Source Hunter", "confidence_rationale": "primary",
+            "confidence": "high", "key_facts": [f"{topic}包含真实事实"], "full_text_fetched": True,
+            "collected_by": "Official Source Hunter", "confidence_rationale": "primary", "evidence_boundary": "仅覆盖当前来源",
         }]}]
         with patch.object(orchestrator, "_build_dry_source_qa", side_effect=AssertionError("dry called")), \
-             patch.object(orchestrator, "_build_dry_claim_graph", side_effect=AssertionError("dry called")):
+             patch.object(orchestrator, "_build_dry_claim_graph", side_effect=AssertionError("dry called")), \
+             patch.object(orchestrator, "_build_dry_gap_fill", side_effect=AssertionError("dry called")):
             result = orchestrator.continue_from_source_fragments(state)
         self.assertEqual(result["pending_gate"], "outline_approved_by_user")
 
@@ -531,9 +565,9 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         }
         clean = {"sources": [source], "approved_source_ids": ["OFF001"]}
         claims = [
-            {"claim_id": "F1", "claim_type": "fact", "text": "收入为120亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元"},
-            {"claim_id": "C1", "claim_type": "calculation", "text": "利润为20亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元，成本为100亿元，因此利润为20亿元", "calculation_inputs": {"revenue": 120, "cost": 100}, "formula": "revenue - cost"},
-            {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入"},
+            {"claim_id": "F1", "claim_type": "fact", "text": "收入为120亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元", "evidence_boundary": "仅覆盖当前披露期"},
+            {"claim_id": "C1", "claim_type": "calculation", "text": "利润为20亿元", "source_ids": ["OFF001"], "evidence_text": "收入为120亿元，成本为100亿元，因此利润为20亿元", "calculation_inputs": {"revenue": 120, "cost": 100}, "formula": "revenue - cost", "evidence_boundary": "仅覆盖当前披露期"},
+            {"claim_id": "J1", "claim_type": "judgment", "text": "应优先投入", "source_ids": ["OFF001"], "reasoning_basis": "用户需求增长支持优先投入", "evidence_boundary": "仅基于当前用户需求证据"},
             {"claim_id": "A1", "claim_type": "assumption", "text": "用户需求增长将延续", "source_ids": ["OFF001"], "reasoning_basis": "由用户需求增长外推增长延续", "premise_claim_ids": ["J1"], "inference_rule": "趋势外推", "evidence_boundary": "仅在用户需求继续增长时成立", "confidence": "low"},
             {"claim_id": "A2", "claim_type": "assumption", "text": "无来源假设", "source_ids": [], "evidence_boundary": "仅为情景，不进入批准图"},
         ]
@@ -578,7 +612,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         orchestrator = WorkflowOrchestrator()
         state = orchestrator.start_gate_workflow("测试")
-        waiting_outline = orchestrator.resume_gate_workflow(state, "确认")
+        waiting_outline = self._continue_with_real_source(orchestrator, state, subject="测试")
         waiting_humanizer = orchestrator.resume_gate_workflow(waiting_outline, {"selection": "A"})
         self.assertEqual(waiting_humanizer["pending_gate"], "humanizer_required")
         self.assertNotIn("FinalReport", waiting_humanizer["artifacts"])
@@ -588,7 +622,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         orchestrator = WorkflowOrchestrator()
         state = orchestrator.start_gate_workflow("测试")
-        state = orchestrator.resume_gate_workflow(state, "确认")
+        state = self._continue_with_real_source(orchestrator, state, subject="测试")
         state = orchestrator.resume_gate_workflow(state, {"selection": "A"})
         draft = state["artifacts"]["ReportDraft"]["markdown"]
         passed = orchestrator.resume_gate_workflow(state, {"humanized_markdown": draft.replace("本节围绕", "本章聚焦", 1), "change_log": {"changed_sections": ["第一节"], "style_only": True, "unchanged_fact_confirmation": True}})
@@ -687,7 +721,7 @@ class WorkflowOrchestratorTest(unittest.TestCase):
 
         clean = {"sources": [{"source_id": "S1", "key_facts": ["收入增长"]}], "approved_source_ids": ["S1"]}
         claims = {"claims": [
-            {"claim_id": "F1", "claim_type": "fact", "text": "收入增长", "source_ids": ["S1"], "evidence_text": "收入增长"},
+            {"claim_id": "F1", "claim_type": "fact", "text": "收入增长", "source_ids": ["S1"], "evidence_text": "收入增长", "evidence_boundary": "仅覆盖当前收入证据"},
             {"claim_id": "A1", "claim_type": "assumption", "text": "收入增长将持续", "source_ids": ["S1"], "reasoning_basis": "由收入增长外推增长持续", "premise_claim_ids": ["F1"], "inference_rule": "趋势外推", "evidence_boundary": "仅为假设", "confidence": "low"},
             {"claim_id": "A2", "claim_type": "assumption", "text": "天气持续晴朗", "source_ids": ["S1"], "reasoning_basis": "由收入增长外推天气", "premise_claim_ids": ["F1"], "inference_rule": "趋势外推", "evidence_boundary": "仅为假设", "confidence": "low"},
         ]}
@@ -695,6 +729,98 @@ class WorkflowOrchestratorTest(unittest.TestCase):
         self.assertIn("A1", audit["approved_claim_ids"])
         self.assertIn("A2", audit["blocked_claim_ids"])
         self.assertEqual(next(c for c in approved["claims"] if c["claim_id"] == "A1")["claim_type"], "assumption")
+
+    def test_source_qa_blocks_ugc_only_low_confidence_without_full_text_or_primary_layers(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        source = {
+            "source_id": "UGC001", "title": "豆包导航体验", "publisher": "Bilibili",
+            "source_type": "ugc_social", "publish_date": "2026-07-12",
+            "url": "https://www.bilibili.com/video/BV1", "confidence": "low",
+            "key_facts": [], "summary": "author: user; play: 123; duration: 03:00",
+            "full_text_fetched": False, "collected_by": "UGC/Social Hunter",
+            "confidence_rationale": "search metadata only",
+        }
+
+        notes, conflicts, gaps, clean = WorkflowOrchestrator().source_qa([source], topic="豆包导航")
+
+        self.assertTrue(notes["requires_user_resolution"])
+        self.assertGreater(gaps["blocking_gap_count"], 0)
+        self.assertTrue(any("official" in str(gap) or "media" in str(gap) for gap in gaps["gaps"]))
+        self.assertEqual(clean["evidence_mode"], "blocked")
+
+    def test_accept_limited_evidence_continues_with_low_confidence_and_boundary(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        state = orchestrator.start_gate_workflow("调研豆包导航的产品能力，以及对百度地图的启示")
+        state = orchestrator.resume_gate_workflow(state, "确认")
+        source = {
+            "source_id": "UGC001", "title": "豆包导航体验", "publisher": "Bilibili",
+            "source_type": "ugc_social", "publish_date": "2026-07-12",
+            "url": "https://www.bilibili.com/video/BV1", "confidence": "low",
+            "key_facts": ["视频正文明确展示豆包导航支持语音规划路线。"],
+            "full_text_fetched": True, "collected_by": "UGC/Social Hunter",
+            "confidence_rationale": "single UGC sample",
+        }
+        state["artifacts"]["SourceListFragment"] = [{"node_id": "ugc_social_hunter", "sources": [source]}]
+        blocked = orchestrator.continue_from_source_fragments(state)
+
+        self.assertEqual(blocked["pending_gate"], "source_qa_conflict_resolution")
+        resumed = orchestrator.resume_gate_workflow(blocked, "accept_limited_evidence")
+        self.assertEqual(resumed["pending_gate"], "outline_approved_by_user")
+        for claim in resumed["artifacts"]["ApprovedClaimGraph"]["claims"]:
+            self.assertEqual(claim["confidence"], "low")
+            self.assertIn("有限证据", claim["evidence_boundary"])
+
+    def test_build_claim_graph_ignores_ugc_search_metadata_and_requires_content(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        graph = WorkflowOrchestrator().build_claim_graph({"sources": [{
+            "source_id": "UGC001", "source_type": "ugc_social", "confidence": "low",
+            "summary": "author: user; play: 123; duration: 03:00", "key_facts": [],
+            "full_text_fetched": False, "evidence_boundary": "search metadata only",
+        }], "approved_source_ids": ["UGC001"]})
+
+        self.assertEqual(graph["claims"], [])
+
+    def test_citation_audit_blocks_claim_without_real_evidence_boundary(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        clean = {"sources": [{"source_id": "OFF001", "key_facts": ["豆包导航支持语音规划路线"]}], "approved_source_ids": ["OFF001"]}
+        graph = {"claims": [{
+            "claim_id": "CL001", "claim_type": "fact", "text": "豆包导航支持语音规划路线",
+            "source_ids": ["OFF001"], "confidence": "high", "reasoning_basis": "key fact",
+            "evidence_text": "豆包导航支持语音规划路线", "boundary_status": "missing",
+        }]}
+
+        audit, approved = WorkflowOrchestrator().audit_claim_graph(graph, clean)
+
+        self.assertEqual(audit["status"], "failed")
+        self.assertEqual(audit["blocked_claim_ids"], ["CL001"])
+        self.assertEqual(approved["claims"], [])
+
+    def test_real_step2_executes_routed_specialists_and_records_method_gaps(self):
+        from workflow_orchestrator import WorkflowOrchestrator
+
+        orchestrator = WorkflowOrchestrator()
+        clean = {"sources": [{
+            "source_id": "OFF001", "source_type": "official", "confidence": "high",
+            "key_facts": ["豆包导航支持语音规划路线"], "full_text_fetched": True,
+            "evidence_boundary": "仅覆盖官方产品说明",
+        }], "approved_source_ids": ["OFF001"], "excluded_source_ids": [], "source_quality_notes": []}
+        artifacts = {
+            "RawUserQuery": "调研豆包导航竞品和用户场景",
+            "IntentBrief": {"research_object": "豆包导航", "user_decision": "形成竞争建议", "audience": "产品团队", "time_scope": "当前", "output_shape": "报告", "evidence_need": [], "ambiguity": [], "semantic_signals": [], "classifier_check": {}, "preflight_skills": []},
+            "AuditCard": {"recommended_frameworks": ["同行竞争对比"]},
+            "CleanSourceList": clean,
+        }
+        result = orchestrator._run_analysis_to_final(artifacts, [], [], "sources ready")
+
+        self.assertIn("SpecialistNotes", result["artifacts"])
+        self.assertTrue(result["artifacts"]["SpecialistNotes"]["notes"])
+        self.assertIn("ClaimGraphPatch", result["artifacts"])
+        self.assertTrue(result["artifacts"]["ClaimGraphPatch"]["patch_reason"])
 
     def test_build_node_packets_returns_constrained_subagent_prompts_for_a_phase(self):
         from workflow_orchestrator import WorkflowOrchestrator
