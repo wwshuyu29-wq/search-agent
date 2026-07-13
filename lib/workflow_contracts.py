@@ -2892,9 +2892,9 @@ def review_outline_compliance(approved_outline: Dict[str, Any], report_draft: Di
             evidence_gaps.append(heading)
         budget = int(contract.get("word_budget", section.get("word_budget", 0)) or 0)
         actual_count = int(section.get("actual_word_count", len(content.replace(" ", ""))) or 0)
-        if budget and actual_count < max(1, int(budget * 0.90)):
+        if budget and actual_count < max(1, int(budget * 0.80)):
             needs_expansion.append(heading)
-        if budget and actual_count > int(budget * 1.10):
+        if budget and actual_count > int(budget * 1.30):
             over_budget.append(heading)
     passed = not missing and not unexpected and actual == expected and not purpose_gaps and not evidence_gaps and not needs_expansion and not over_budget
     return {

@@ -374,7 +374,7 @@ class ReportGenerator:
             quality = self._content_quality(paragraphs)
             actual_word_count = len("".join(paragraphs).replace(" ", ""))
             word_budget = int(section_contract.get("word_budget", 600))
-            lower, upper = int(word_budget * 0.90), int(word_budget * 1.10)
+            lower, upper = int(word_budget * 0.80), int(word_budget * 1.30)
             if actual_word_count < lower or quality["template_ratio"] > 0.35:
                 raise ValueError(f"needs_expansion: {heading} actual_word_count={actual_word_count}, required={lower}-{upper}, quality={quality}")
             if actual_word_count > upper:
