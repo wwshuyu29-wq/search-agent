@@ -26,7 +26,16 @@ class SpecialistResult:
 
 
 def _method_adapter(request,entry):
- return {"status":"completed","notes":[{"specialist_id":request.specialist_id,"prompt_path":entry["prompt_path"]}],"method_references":[entry["prompt_path"]]}
+ return {
+  "status":"setup_required",
+  "notes":[{
+   "type":"method_reference",
+   "specialist_id":request.specialist_id,
+   "prompt_path":entry["prompt_path"],
+   "note":"Method reference only; no executable specialist adapter ran and no claim was produced.",
+  }],
+  "method_references":[entry["prompt_path"]],
+ }
 
 def _dependency_ready(dep,env):
  if dep.endswith("_API_KEY"): return bool(env.get(dep))

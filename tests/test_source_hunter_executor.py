@@ -506,7 +506,12 @@ class SourceHunterExecutorTest(unittest.TestCase):
         self.assertEqual(row["publisher"], "Bilibili")
         self.assertEqual(row["url"], "https://www.bilibili.com/video/BV123")
         self.assertEqual(row["retrieval_tool"], "bili-cli")
-        self.assertIn("地图观察员", row["key_facts"][0])
+        self.assertEqual(row["key_facts"], [])
+        self.assertNotIn("content_excerpt", row)
+        self.assertEqual(
+            row["metadata"],
+            {"author": "地图观察员", "play": 1200, "duration": "5:20"},
+        )
 
     def test_ugc_social_hunter_skips_when_bilibili_cli_is_missing(self):
         from source_hunter_executor import SourceHunterExecutor
@@ -594,6 +599,52 @@ class SourceHunterExecutorTest(unittest.TestCase):
         analytics = next(source for source in fragment["sources"] if "analytics" in source["title"])
         self.assertIn("Internal curated analytics", analytics["key_facts"][0])
         self.assertIn("method source", analytics["confidence_rationale"])
+
+    def test_ugc_runner_real_shape_separates_metadata_from_key_facts(self):
+        """P1 Fix #3: UGC runner shape - metadata fields isolated from key_facts/content_excerpt."""
+        from source_hunter_executor import SourceHunterExecutor
+
+        def real_shape_runner(query, *, limit, lang, hunter_id):
+            return [{
+                "title": "高德地图用户体验评测",
+                "url": "https://www.bilibili.com/video/BV1xx",
+                "source": "Bilibili",
+                "confidence": "low",
+                "full_text_fetched": False,
+                "metadata": {
+                    "author": "数码博主",
+                    "play": 25000,
+                    "duration": "12:30",
+                },
+                "fetcher": "bili-cli",
+            }]
+
+        executor = SourceHunterExecutor(search_runner=real_shape_runner)
+        plan = {
+            "tasks": [{
+                "task_id": "UGC-T003",
+                "assigned_hunter": "ugc_social_hunter",
+                "dimension": "用户讨论",
+                "query_zh": ["高德地图 体验"],
+                "query_en": [],
+                "source_layers": ["ugc", "social"],
+                "expected_evidence": ["UGC信号"],
+                "source_id_prefix": "UGC",
+            }]
+        }
+
+        fragment = executor.run_hunter("ugc_social_hunter", plan, limit_per_query=1)
+        row = fragment["sources"][0]
+
+        # Metadata is isolated
+        self.assertEqual(row["metadata"]["author"], "数码博主")
+        self.assertEqual(row["metadata"]["play"], 25000)
+        self.assertEqual(row["metadata"]["duration"], "12:30")
+        # Key facts and content_excerpt are empty for UGC without full text
+        self.assertEqual(row["key_facts"], [])
+        self.assertNotIn("content_excerpt", row)
+        self.assertEqual(row["source_type"], "ugc_social")
+        self.assertEqual(row["full_text_fetched"], False)
 
 
 if __name__ == "__main__":

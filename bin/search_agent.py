@@ -458,6 +458,11 @@ class SearchAgentSkill:
     ) -> Dict:
         """Execute one real Source Hunter vertical slice and persist its fragment."""
         state = self._read_workflow_state(state_file)
+        if state.get("pending_gate") != "source_hunters_required":
+            raise ValueError(
+                "Source Hunter execution requires pending_gate=source_hunters_required; "
+                f"got {state.get('pending_gate')!r}"
+            )
         artifacts = state.setdefault("artifacts", {})
         search_plan = artifacts.get("SearchPlan")
         if not search_plan:
@@ -501,6 +506,11 @@ class SearchAgentSkill:
     ) -> List[Dict]:
         """Execute every Source Hunter node and persist all fragments."""
         state = self._read_workflow_state(state_file)
+        if state.get("pending_gate") != "source_hunters_required":
+            raise ValueError(
+                "Source Hunter execution requires pending_gate=source_hunters_required; "
+                f"got {state.get('pending_gate')!r}"
+            )
         artifacts = state.setdefault("artifacts", {})
         search_plan = artifacts.get("SearchPlan")
         if not search_plan:

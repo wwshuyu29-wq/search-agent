@@ -247,22 +247,19 @@ class SourceHunterExecutor:
         for record in records[:limit]:
             bvid = record.get("bvid") or record.get("id") or ""
             url = f"https://www.bilibili.com/video/{bvid}" if bvid else ""
-            author = record.get("author") or "unknown author"
-            play = record.get("play")
-            duration = record.get("duration")
-            summary_parts = [f"author: {author}"]
-            if play is not None:
-                summary_parts.append(f"play: {play}")
-            if duration:
-                summary_parts.append(f"duration: {duration}")
+            metadata = {
+                "author": record.get("author") or "unknown author",
+                "play": record.get("play"),
+                "duration": record.get("duration"),
+            }
             results.append(
                 {
                     "title": record.get("title", ""),
                     "url": url,
-                    "summary": "; ".join(summary_parts),
                     "source": "Bilibili",
                     "confidence": "low",
                     "full_text_fetched": False,
+                    "metadata": metadata,
                     "fetcher": "bili-cli",
                 }
             )
@@ -608,6 +605,10 @@ class SourceHunterExecutor:
     ) -> Dict[str, Any]:
         url = result.get("url", "")
         description = result.get("description") or result.get("snippet") or result.get("summary") or ""
+        content_excerpt = result.get("content_excerpt") or result.get("support_excerpt") or result.get("evidence_text")
+        key_facts = result.get("key_facts")
+        if key_facts is None:
+            key_facts = [description] if description and config["source_type"] != "ugc_social" else []
         publisher = result.get("source") or result.get("publisher") or self._publisher_from_url(url)
         fetcher = result.get("fetcher")
         retrieval_tool = self._retrieval_tool_for(config["source_type"])
@@ -639,13 +640,15 @@ class SourceHunterExecutor:
             "url": url,
             "canonical_url": self._canonical_url(url),
             "confidence": result.get("confidence") or "medium",
-            "key_facts": [description] if description else [],
+            "key_facts": list(key_facts),
+            **({"content_excerpt": content_excerpt} if content_excerpt else {}),
             "full_text_fetched": bool(result.get("full_text_fetched", False)),
             "collected_by": config["collector"],
             "confidence_rationale": "; ".join(rationale_bits) + ".",
             "retrieval_tool": retrieval_tool,
             "relevance_score": result.get("relevance_score"),
             "metrics": result.get("metrics"),
+            "metadata": result.get("metadata", {}),
             "method_source": bool(result.get("method_source", False)),
         }
 

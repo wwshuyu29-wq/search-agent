@@ -554,6 +554,7 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
             "source_scope",
             "planned_expert_skills",
             "open_assumptions",
+            "decision_target",
         ],
         "quality_rules": [
             "Search cannot start until this artifact is confirmed.",
@@ -572,6 +573,7 @@ ARTIFACT_CONTRACTS: Dict[str, Dict[str, Any]] = {
         ],
         "required_fields": [
             "frameworks",
+            "decision_target",
             "tasks",
             "task_id",
             "dimension",

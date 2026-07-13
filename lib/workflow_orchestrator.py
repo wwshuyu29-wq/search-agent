@@ -159,7 +159,11 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
 
         source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
-            self.source_qa(raw_source_list["sources"], artifacts.get("IntentBrief", {}).get("research_object", ""))
+            self.source_qa(
+                raw_source_list["sources"],
+                artifacts.get("IntentBrief", {}).get("research_object", ""),
+                allow_fixture_sources=True,
+            )
         )
         artifacts["SourceQANotes"] = source_qa_notes
         artifacts["ConflictRegister"] = conflict_register
@@ -376,7 +380,7 @@ class WorkflowOrchestrator:
         if not isinstance(artifact, dict):
             return list(required_fields)
 
-        top_level_fields = ["frameworks", "tasks"]
+        top_level_fields = ["frameworks", "decision_target", "tasks"]
         missing = [field for field in top_level_fields if field not in artifact]
         task_fields = [field for field in required_fields if field not in top_level_fields]
         tasks = artifact.get("tasks", [])
@@ -646,9 +650,18 @@ class WorkflowOrchestrator:
                     "expected_evidence": ["发布时间", "原文内容", "与调研主题的直接关系"],
                     "source_id_prefix": prefixes[layer],
                 })
-        return {"frameworks": audit_card["recommended_frameworks"], "tasks": tasks}
+        return {
+            "frameworks": audit_card["recommended_frameworks"],
+            "decision_target": audit_card.get("decision_target", ""),
+            "tasks": tasks,
+        }
 
-    def source_qa(self, sources: List[Dict[str, Any]], topic: str = ""):
+    def source_qa(
+        self,
+        sources: List[Dict[str, Any]],
+        topic: str = "",
+        allow_fixture_sources: bool = False,
+    ):
         """Conservatively gate thin, low-confidence, or weakly relevant evidence."""
         approved, excluded, missing = [], [], []
         source_types = set()
@@ -663,6 +676,12 @@ class WorkflowOrchestrator:
             if not source_id or not url:
                 excluded.append(source_id or "unknown")
                 missing.append({"source_id": source_id, "reason": "missing source_id or URL"})
+                continue
+            if self._is_reserved_or_fixture_url(url) and not (
+                allow_fixture_sources and source.get("fixture_source") is True
+            ):
+                excluded.append(source_id)
+                missing.append({"source_id": source_id, "reason": "reserved or fixture domain is not valid formal evidence"})
                 continue
             source_types.add(str(source.get("source_type", "")).lower())
             searchable = " ".join(str(source.get(field, "")) for field in ("title", "publisher", "support_excerpt", "evidence_text"))
@@ -693,11 +712,24 @@ class WorkflowOrchestrator:
         }
         return notes, conflicts, gaps, clean
 
+    def _is_reserved_or_fixture_url(self, url: str) -> bool:
+        host = (urlsplit(url).hostname or "").lower().rstrip(".")
+        reserved_hosts = {"example.com", "example.org", "example.net", "localhost"}
+        return (
+            host in reserved_hosts
+            or any(host.endswith(f".{item}") for item in reserved_hosts)
+            or host.endswith(".invalid")
+            or host.endswith(".test")
+            or host.endswith(".localhost")
+        )
+
     def build_claim_graph(self, clean_source_list: Dict[str, Any]) -> Dict[str, Any]:
         """Extract minimal factual claims from approved source key facts."""
         claims = []
         for source in clean_source_list.get("sources", []):
             if source.get("method_source"):
+                continue
+            if source.get("source_type") == "ugc_social" and not source.get("full_text_fetched"):
                 continue
             for fact in source.get("key_facts", []):
                 if fact:
@@ -733,8 +765,12 @@ class WorkflowOrchestrator:
                 reason = "claim requires a real evidence_boundary before Citation Audit"
             else:
                 sources = [source_map[sid] for sid in cited]
-                if claim_type == "fact" and not self._claim_has_textual_support(claim, sources):
-                    reason = "source evidence does not textually support fact"
+                if claim_type == "fact":
+                    non_ugc = [s for s in sources if s.get("source_type") != "ugc_social"]
+                    if not non_ugc:
+                        reason = "fact claim cannot be supported solely by UGC sources; official/qualified media required"
+                    elif not self._claim_has_textual_support(claim, sources):
+                        reason = "source evidence does not textually support fact"
                 elif claim_type == "calculation":
                     if not (claim.get("evidence_text") or claim.get("support_excerpt")):
                         reason = "calculation requires evidence_text/support_excerpt"
@@ -898,6 +934,7 @@ class WorkflowOrchestrator:
         claim_graph = self.build_claim_graph(clean_source_list)
         artifacts["ClaimGraph"] = claim_graph
         specialist_notes, claim_graph_patch = self._execute_formal_specialists(artifacts, claim_graph)
+        self._merge_specialist_claims(claim_graph, claim_graph_patch, clean_source_list)
         artifacts["SpecialistNotes"] = specialist_notes
         artifacts["ClaimGraphPatch"] = claim_graph_patch
         validations.append(self.validate_artifact("ClaimGraph", claim_graph))
@@ -960,6 +997,33 @@ class WorkflowOrchestrator:
             "patch_reason": "Executed routed specialists; method-only outputs remain notes and evidence gaps.",
         }
         return specialist_notes, claim_graph_patch
+
+    def _merge_specialist_claims(
+        self,
+        claim_graph: Dict[str, Any],
+        claim_graph_patch: Dict[str, Any],
+        clean_source_list: Dict[str, Any],
+    ) -> None:
+        new_claims = claim_graph_patch.get("new_claims", [])
+        if not isinstance(new_claims, list):
+            raise ValueError("ClaimGraphPatch.new_claims must be a list")
+        if not new_claims:
+            return
+        existing_ids = {claim.get("claim_id") for claim in claim_graph.get("claims", [])}
+        required = self.artifact_contracts["ClaimGraph"]["required_fields"]
+        missing = self._missing_row_fields("claims", new_claims, required)
+        if missing:
+            raise ValueError(f"invalid specialist ClaimGraphPatch.new_claims: {missing}")
+        source_ids = set(clean_source_list.get("approved_source_ids", []))
+        for claim in new_claims:
+            if claim.get("claim_id") in existing_ids:
+                raise ValueError(f"duplicate specialist claim_id: {claim.get('claim_id')}")
+            if not claim.get("evidence_boundary"):
+                raise ValueError("specialist claim requires evidence_boundary")
+            if not set(claim.get("source_ids", [])).issubset(source_ids):
+                raise ValueError("specialist claim source_ids must reference approved evidence")
+            existing_ids.add(claim["claim_id"])
+        claim_graph.setdefault("claims", []).extend(deepcopy(new_claims))
 
     def _run_after_outline_approval(self, state: Dict[str, Any], decision: Dict[str, Any]) -> Dict[str, Any]:
         artifacts = deepcopy(state["artifacts"])
@@ -1034,14 +1098,19 @@ class WorkflowOrchestrator:
 
     def continue_from_source_fragments(self, state: Dict[str, Any], user_decision: str = "source fragments ready") -> Dict[str, Any]:
         """Continue a workflow using already-executed real SourceListFragment artifacts."""
+        if state.get("pending_gate") != "source_hunters_required":
+            raise ValueError(
+                "continue_from_source_fragments requires pending_gate=source_hunters_required; "
+                f"got {state.get('pending_gate')!r}"
+            )
         artifacts = deepcopy(state.get("artifacts", {}))
         validations = deepcopy(state.get("validations", []))
         phase_results = deepcopy(state.get("phase_results", []))
 
         if "SearchPlan" not in artifacts:
             raise ValueError("SearchPlan artifact is required before continuing from source fragments")
-        if "SourceListFragment" not in artifacts:
-            raise ValueError("SourceListFragment artifact is required before continuing from source fragments")
+        if not artifacts.get("SourceListFragment"):
+            raise ValueError("SourceListFragment artifact must contain at least one fragment before continuing")
 
         raw_source_list, merger_log = self.merge_source_fragments(artifacts["SourceListFragment"])
         artifacts["RawSourceList"] = raw_source_list
@@ -1050,7 +1119,11 @@ class WorkflowOrchestrator:
         phase_results.append(self._phase_result("step1_source_merge", ["RawSourceList", "MergerLog"]))
 
         source_qa_notes, conflict_register, gap_list, clean_source_list = self._normalize_source_qa_result(
-            self.source_qa(raw_source_list["sources"], artifacts.get("IntentBrief", {}).get("research_object", ""))
+            self.source_qa(
+                raw_source_list["sources"],
+                artifacts.get("IntentBrief", {}).get("research_object", ""),
+                allow_fixture_sources=False,
+            )
         )
         artifacts["SourceQANotes"] = source_qa_notes
         artifacts["ConflictRegister"] = conflict_register
@@ -1176,6 +1249,15 @@ class WorkflowOrchestrator:
         if relation:
             semantic["research_object"] = relation.group(1).strip()
             decision_target = relation.group(2).strip()
+        if not decision_target:
+            comparison = re.search(
+                r"(?:调研|研究|分析|了解)?\s*([\u4e00-\u9fff\w]+?)\s*(?:vs\.?|对比|和|与| versus )\s*([\u4e00-\u9fff\w]+?)(?:的|，|。|;|；|\s|$)",
+                user_query,
+                re.IGNORECASE,
+            )
+            if comparison:
+                semantic["research_object"] = comparison.group(1).strip()
+                decision_target = comparison.group(2).strip()
         recommendations = classify_intent(user_query, top_k=3, return_complexity=True)
         frameworks = [rec["framework"] for rec in recommendations] or ["同行竞争对比"]
 
@@ -1213,6 +1295,7 @@ class WorkflowOrchestrator:
             "source_scope": ["official", "media", "rss", "ugc", "finance_data", "marketing_intelligence"],
             "planned_expert_skills": step0_context["preflight_skills"],
             "open_assumptions": semantic["ambiguity"],
+            "decision_target": decision_target,
         }
         return intent_brief, audit_card
 
@@ -1231,7 +1314,11 @@ class WorkflowOrchestrator:
                     "source_id_prefix": "AUTO",
                 }
             )
-        return {"frameworks": audit_card["recommended_frameworks"], "tasks": tasks}
+        return {
+            "frameworks": audit_card["recommended_frameworks"],
+            "decision_target": audit_card.get("decision_target", ""),
+            "tasks": tasks,
+        }
 
     def _build_dry_source_list(self) -> List[Dict[str, Any]]:
         source_specs = [
@@ -1256,6 +1343,7 @@ class WorkflowOrchestrator:
                 "collected_by": collected_by,
                 "confidence_rationale": rationale,
                 "coverage_scope": "仅用于 dry-run 的 2026-07-08 示例记录",
+                "fixture_source": True,
             }
             for source_id, title, publisher, source_type, confidence, rationale, collected_by in source_specs
         ]

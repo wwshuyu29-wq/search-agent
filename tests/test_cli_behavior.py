@@ -206,7 +206,7 @@ class CliBehaviorTest(unittest.TestCase):
             orchestrator = __import__("workflow_orchestrator").WorkflowOrchestrator()
             state = orchestrator.resume_gate_workflow(state, "确认")
             topic = state["artifacts"]["IntentBrief"]["research_object"]
-            source = {"source_id": "OFF001", "title": f"{topic}官方更新", "publisher": topic, "source_type": "official", "publish_date": "2026-07-10", "url": "https://official.invalid/test", "canonical_url": "https://official.invalid/test", "confidence": "high", "key_facts": [f"{topic}上线正式功能"], "full_text_fetched": True, "collected_by": "Official Source Hunter", "confidence_rationale": "primary", "evidence_boundary": "仅覆盖测试更新"}
+            source = {"source_id": "OFF001", "title": f"{topic}官方更新", "publisher": topic,             "source_type": "official", "publish_date": "2026-07-10", "url": "https://www.doubao.com/test", "canonical_url": "https://www.doubao.com/test", "confidence": "high", "key_facts": [f"{topic}上线正式功能"], "full_text_fetched": True, "collected_by": "Official Source Hunter", "confidence_rationale": "primary", "evidence_boundary": "仅覆盖测试更新"}
             state["artifacts"]["SourceListFragment"] = [{"node_id": "official_source_hunter", "sources": [source]}]
             state = orchestrator.continue_from_source_fragments(state)
             state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
@@ -226,6 +226,7 @@ class CliBehaviorTest(unittest.TestCase):
                 "高德地图最近三个月上新，对百度地图市场组有什么启示",
                 str(state_file),
             )
+            state = agent.resume_gate_workflow("确认", str(state_file))
             state["artifacts"]["SearchPlan"] = {
                 "frameworks": ["同行竞争对比"],
                 "tasks": [
@@ -266,7 +267,7 @@ class CliBehaviorTest(unittest.TestCase):
                 "schema_version": "workflow_state.v1",
                 "status": "waiting_for_user",
                 "current_phase": "step1_parallel_source_hunting",
-                "pending_gate": "source_list_fragment_valid",
+                "pending_gate": "source_hunters_required",
                 "artifacts": {
                     "SearchPlan": {
                         "frameworks": ["同行竞争对比"],
@@ -314,12 +315,23 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertIn("Source Hunter Executed", printed)
         self.assertIn("sources: 1", printed)
 
+    def test_cli_rejects_source_hunter_after_source_stage(self):
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(json.dumps({
+                "pending_gate": "outline_approved_by_user",
+                "artifacts": {"SearchPlan": {"frameworks": [], "tasks": []}},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_hunters_required"):
+                agent.execute_source_hunter("official_source_hunter", str(state_file))
+
     def test_cli_source_hunter_requires_search_plan(self):
         agent = SearchAgentSkill()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = Path(temp_dir) / "search_agent_state.json"
-            state_file.write_text(json.dumps({"artifacts": {}}, ensure_ascii=False), encoding="utf-8")
+            state_file.write_text(json.dumps({"pending_gate": "source_hunters_required", "artifacts": {}}, ensure_ascii=False), encoding="utf-8")
 
             with self.assertRaises(ValueError) as context:
                 agent.execute_source_hunter("official_source_hunter", str(state_file))
@@ -335,7 +347,7 @@ class CliBehaviorTest(unittest.TestCase):
                 "schema_version": "workflow_state.v1",
                 "status": "ready_for_execution",
                 "current_phase": "step1_parallel_source_hunting",
-                "pending_gate": "source_list_fragment_valid",
+                "pending_gate": "source_hunters_required",
                 "artifacts": {
                     "SearchPlan": {
                         "frameworks": ["同行竞争对比"],
@@ -392,6 +404,7 @@ class CliBehaviorTest(unittest.TestCase):
                 "高德地图最近三个月上新，对百度地图市场组有什么启示",
                 str(state_file),
             )
+            state = agent.resume_gate_workflow("确认", str(state_file))
             state["artifacts"]["SearchPlan"] = {
                 "frameworks": ["同行竞争对比"],
                 "tasks": [
@@ -419,8 +432,8 @@ class CliBehaviorTest(unittest.TestCase):
                             "publisher": "示例媒体",
                             "source_type": "rss_news",
                             "publish_date": "2026-07-10",
-                            "url": "https://example.com/amap",
-                            "canonical_url": "https://example.com/amap",
+                            "url": "https://www.baidu.com/amap",
+                            "canonical_url": "https://www.baidu.com/amap",
                             "confidence": "medium",
                             "key_facts": ["高德地图上线新功能。"],
                             "full_text_fetched": False,
@@ -444,6 +457,17 @@ class CliBehaviorTest(unittest.TestCase):
         self.assertGreater(saved["artifacts"]["GapList"]["blocking_gap_count"], 0)
         self.assertIn("Workflow Continued From Source Fragments", printed)
         self.assertIn("raw_sources: 1", printed)
+
+    def test_cli_rejects_repeated_continue_after_source_stage(self):
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(json.dumps({
+                "pending_gate": "outline_approved_by_user",
+                "artifacts": {"SearchPlan": {}, "SourceListFragment": []},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_hunters_required"):
+                agent.continue_workflow_from_sources(str(state_file))
 
     def test_cli_can_print_codex_execution_model(self):
         agent = SearchAgentSkill()
@@ -498,6 +522,55 @@ class CliBehaviorTest(unittest.TestCase):
                     os.environ.pop("SEARCH_AGENT_OUTPUT_DIR", None)
                 else:
                     os.environ["SEARCH_AGENT_OUTPUT_DIR"] = previous
+
+    def test_cli_rejects_execute_hunter_at_final_report_stage(self):
+        """P1 Fix #6: execute hunter rejected at final_report_review gate."""
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(json.dumps({
+                "pending_gate": "final_report_review",
+                "artifacts": {"SearchPlan": {"frameworks": [], "tasks": []}},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_hunters_required"):
+                agent.execute_source_hunter("official_source_hunter", str(state_file))
+
+    def test_cli_rejects_execute_all_hunters_at_outline_stage(self):
+        """P1 Fix #6: execute all hunters rejected at outline_approved_by_user gate."""
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(json.dumps({
+                "pending_gate": "outline_approved_by_user",
+                "artifacts": {"SearchPlan": {"frameworks": [], "tasks": []}},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_hunters_required"):
+                agent.execute_all_source_hunters(str(state_file))
+
+    def test_cli_rejects_continue_at_humanizer_stage(self):
+        """P1 Fix #6: continue rejected at humanizer_required gate."""
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(json.dumps({
+                "pending_gate": "humanizer_required",
+                "artifacts": {"SearchPlan": {}, "SourceListFragment": []},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "source_hunters_required"):
+                agent.continue_workflow_from_sources(str(state_file))
+
+    def test_cli_decision_target_enters_audit_card_for_vs_query(self):
+        """P1 Fix #2: decision_target appears in AuditCard for X vs Y queries."""
+        agent = SearchAgentSkill()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state = agent.start_gate_workflow(
+                "调研高德地图 vs 百度地图的竞争格局",
+                str(state_file),
+            )
+            audit_card = state["artifacts"]["AuditCard"]
+            self.assertEqual(audit_card["decision_target"], "百度地图")
+            self.assertEqual(audit_card["topic"], "高德地图")
 
 
 if __name__ == "__main__":
